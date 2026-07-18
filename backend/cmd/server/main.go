@@ -69,7 +69,9 @@ func main() {
 	// --- routing ---
 	apiHandler := api.New(st)
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+	// Note: "/healthz" is reserved by Google Front End on Cloud Run and never
+	// reaches the container, so the health route is exposed as "/livez".
+	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
