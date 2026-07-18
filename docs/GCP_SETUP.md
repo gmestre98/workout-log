@@ -1,5 +1,14 @@
 # GCP + deployment setup
 
+> **Status (2026-07-18): all infrastructure below is already provisioned** in
+> project `intricate-reef-424222-d6` (Firestore, service accounts, Workload
+> Identity Federation, Secret Manager, GitHub variables), the app is deployed to
+> Cloud Run, and the routine is seeded. The **only remaining step is creating the
+> Google OAuth client** — see [Remaining: create the OAuth client](#remaining-create-the-oauth-client)
+> at the bottom. The rest of this document is the full reproducible guide.
+
+Live URL: **https://workout-log-qectzihgmq-ew.a.run.app**
+
 One-time setup to run the app on **Cloud Run + Firestore** (both within GCP's
 always-free tier for a single user). Commands assume your project
 `intricate-reef-424222-d6`; change `PROJECT` / `REGION` if needed.
@@ -147,3 +156,50 @@ GOOGLE_CLOUD_PROJECT=$PROJECT npm run seed
 ```
 
 This loads your 12 July exercises. Add `-- --force` to overwrite.
+
+---
+
+## Remaining: create the OAuth client
+
+This is the only step that can't be scripted (Google has no API to create a
+web OAuth client on a personal, org-less project). In the Cloud Console:
+
+1. **APIs & Services → OAuth consent screen**
+   - User type: **External** → Create.
+   - App name: `Workout Log`; user support email + developer email: your Gmail.
+   - Scopes: leave the defaults (email, profile, openid — no verification needed).
+   - **Test users → Add** `goncalo.mestre1998@gmail.com`. Keeping the app in
+     *Testing* is the single-user lock: only listed test users can sign in.
+   - Save.
+
+2. **APIs & Services → Credentials → Create credentials → OAuth client ID**
+   - Application type: **Web application**, name `Workout Log`.
+   - **Authorized redirect URI:**
+     `https://workout-log-qectzihgmq-ew.a.run.app/auth/callback`
+   - Create, then copy the **Client ID** and **Client secret**.
+
+3. Wire the values in (from a terminal with `gcloud` + `gh`):
+
+   ```bash
+   # real client secret into Secret Manager (adds a new version)
+   printf '%s' 'PASTE_CLIENT_SECRET' | \
+     gcloud secrets versions add GOOGLE_CLIENT_SECRET --data-file=- \
+     --project=intricate-reef-424222-d6
+
+   # client ID as a GitHub Actions variable
+   gh variable set GOOGLE_CLIENT_ID --repo gmestre98/workout-log --body 'PASTE_CLIENT_ID'
+   ```
+
+4. Redeploy so the new values take effect:
+
+   ```bash
+   gh workflow run Deploy --repo gmestre98/workout-log
+   ```
+
+5. Open **https://workout-log-qectzihgmq-ew.a.run.app** and **Sign in with
+   Google**. Add it to your phone home screen (Share → Add to Home Screen) to
+   install the PWA.
+
+`OAUTH_REDIRECT_URL`, `ALLOWED_EMAIL`, and all other variables/secrets are
+already set.
+
