@@ -11,6 +11,12 @@ export default defineConfig({
     VitePWA({
       registerType: "autoUpdate",
       includeAssets: ["favicon.svg", "icon.svg"],
+      workbox: {
+        // The service worker's SPA navigation fallback must NOT swallow server
+        // routes: /auth/* (Google OAuth redirects) and /api/* must hit the
+        // network, otherwise clicking "Sign in" just re-serves index.html.
+        navigateFallbackDenylist: [/^\/auth\//, /^\/api\//],
+      },
       manifest: {
         name: "Workout Log",
         short_name: "Workouts",
