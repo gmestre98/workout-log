@@ -1,0 +1,20 @@
+# Node
+node_modules/
+frontend/dist/
+frontend/dev-dist/
+*.local
+
+# Go
+backend/server
+backend/tmp/
+
+# Env / secrets
+.env
+.env.*
+*-key.json
+gha-creds-*.json
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
