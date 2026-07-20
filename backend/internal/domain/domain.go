@@ -2,6 +2,8 @@
 // dependencies on storage or transport so it stays easy to unit test.
 package domain
 
+import "time"
+
 // Unit describes how an exercise's amount is measured.
 type Unit string
 
@@ -66,4 +68,13 @@ type DayLog struct {
 // NewDayLog returns an empty, ready-to-use DayLog for date.
 func NewDayLog(date string) DayLog {
 	return DayLog{Date: date, Exercises: map[string]ExerciseLog{}}
+}
+
+// RoutineVersion is a saved snapshot of the whole routine at a point in time,
+// so past configurations are never lost and can be reviewed or compared.
+type RoutineVersion struct {
+	ID        string     `json:"id" firestore:"-"`
+	CreatedAt time.Time  `json:"createdAt" firestore:"createdAt"`
+	Note      string     `json:"note" firestore:"note"`
+	Exercises []Exercise `json:"exercises" firestore:"exercises"`
 }

@@ -28,4 +28,9 @@ type Store interface {
 	// ListDays returns logs with date in [from, to] inclusive (lexicographic,
 	// which is chronological for YYYY-MM-DD).
 	ListDays(ctx context.Context, from, to string) ([]domain.DayLog, error)
+
+	// ListRoutineVersions returns saved routine snapshots, newest first.
+	ListRoutineVersions(ctx context.Context) ([]domain.RoutineVersion, error)
+	GetRoutineVersion(ctx context.Context, id string) (domain.RoutineVersion, error)
+	CreateRoutineVersion(ctx context.Context, v domain.RoutineVersion) (domain.RoutineVersion, error)
 }

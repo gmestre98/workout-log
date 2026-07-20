@@ -1,4 +1,4 @@
-import type { ExerciseLog, SetEntry, Unit } from "./types";
+import type { DayLog, Exercise, ExerciseLog, SetEntry, Unit } from "./types";
 
 // exerciseCompletion mirrors the backend: (sum of actual over completed sets) /
 // (plannedSets * plannedAmount), clamped to [0, 1]. Used for instant UI
@@ -68,4 +68,101 @@ export function newLog(exercise: {
     unit: exercise.unit,
     sets,
   };
+}
+
+// dayCompletion mirrors the backend DayAverage: the mean completion across the
+// given (active) exercises for one day; a missing log counts as 0%.
+export function dayCompletion(exercises: Exercise[], day: DayLog | undefined): number {
+  if (exercises.length === 0) return 0;
+  let sum = 0;
+  for (const ex of exercises) {
+    const log = day?.exercises[ex.id];
+    if (log) sum += exerciseCompletion(log);
+  }
+  return sum / exercises.length;
+}
+
+// addDaysISO shifts a YYYY-MM-DD date by delta days (local calendar).
+export function addDaysISO(iso: string, delta: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return todayISO(new Date(y, m - 1, d + delta));
+}
+
+// computeStreak counts consecutive active days ending today (or yesterday, as a
+// grace day if today isn't logged yet). activeDates holds YYYY-MM-DD strings
+// with any completion.
+export function computeStreak(activeDates: Set<string>, today: string): number {
+  let cursor = activeDates.has(today) ? today : addDaysISO(today, -1);
+  let streak = 0;
+  while (activeDates.has(cursor)) {
+    streak++;
+    cursor = addDaysISO(cursor, -1);
+  }
+  return streak;
+}
+
+// heatLevel buckets a completion fraction into 0–4 for the heatmap.
+export function heatLevel(fraction: number): 0 | 1 | 2 | 3 | 4 {
+  if (fraction <= 0) return 0;
+  if (fraction < 0.34) return 1;
+  if (fraction < 0.67) return 2;
+  if (fraction < 1) return 3;
+  return 4;
+}
+
+// slotColor maps a time slot to one of the day-arc hues. Known slots map by
+// name (Wake up → dawn, Pre lunch → noon, Evening → dusk); unknown slots cycle
+// by their order of appearance.
+export function slotColor(timeSlot: string, orderedSlots: string[]): "dawn" | "noon" | "dusk" {
+  const key = timeSlot.trim().toLowerCase();
+  if (key.includes("wake") || key.includes("morning") || key.includes("dawn")) return "dawn";
+  if (key.includes("lunch") || key.includes("noon") || key.includes("midday")) return "noon";
+  if (key.includes("evening") || key.includes("night") || key.includes("dusk")) return "dusk";
+  const cycle: ("dawn" | "noon" | "dusk")[] = ["dawn", "noon", "dusk"];
+  const idx = orderedSlots.indexOf(timeSlot);
+  return cycle[(idx < 0 ? 0 : idx) % 3];
+}
+
+// primaryMuscle reduces a free-text muscle group to its headline (e.g.
+// "Legs (Quads, Glutes)" → "Legs", "Back, Biceps" → "Back").
+export function primaryMuscle(muscleGroup: string): string {
+  const head = muscleGroup.split(/[(,]/)[0].trim();
+  return head || "Other";
+}
+
+export interface MuscleStat {
+  group: string;
+  completion: number; // [0,1]
+}
+
+// muscleBreakdown averages each exercise's completion over the period, then
+// groups by primary muscle. Missing logs count as 0% (consistency with the
+// day average). Returns groups sorted by completion descending.
+export function muscleBreakdown(exercises: Exercise[], days: DayLog[]): MuscleStat[] {
+  const groups = new Map<string, { sum: number; count: number }>();
+  for (const ex of exercises) {
+    let exSum = 0;
+    for (const day of days) {
+      const log = day.exercises[ex.id];
+      exSum += log ? exerciseCompletion(log) : 0;
+    }
+    const exAvg = days.length > 0 ? exSum / days.length : 0;
+    const key = primaryMuscle(ex.muscleGroup);
+    const g = groups.get(key) ?? { sum: 0, count: 0 };
+    g.sum += exAvg;
+    g.count += 1;
+    groups.set(key, g);
+  }
+  return [...groups.entries()]
+    .map(([group, g]) => ({ group, completion: g.count ? g.sum / g.count : 0 }))
+    .sort((a, b) => b.completion - a.completion);
+}
+
+// dayHeader formats a YYYY-MM-DD as { dow: "MON", label: "21 Jul" }.
+const DOW = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export function dayHeader(iso: string): { dow: string; label: string } {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return { dow: DOW[dt.getDay()], label: `${d} ${MON[m - 1]}` };
 }

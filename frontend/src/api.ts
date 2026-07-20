@@ -1,4 +1,4 @@
-import type { DayLog, Exercise, Summary } from "./types";
+import type { DayLog, Exercise, RoutineVersion, Summary } from "./types";
 
 // Thrown when the user is not signed in (HTTP 401). The app uses this to show
 // the sign-in screen.
@@ -42,7 +42,13 @@ export const api = {
 
   getDay: (date: string) => request<DayLog>("GET", `/api/days/${date}`),
   saveDay: (day: DayLog) => request<DayLog>("PUT", `/api/days/${day.date}`, day),
+  listDays: (from: string, to: string) =>
+    request<DayLog[]>("GET", `/api/days?from=${from}&to=${to}`),
 
   summary: (from: string, to: string) =>
     request<Summary>("GET", `/api/summary?from=${from}&to=${to}`),
+
+  listVersions: () => request<RoutineVersion[]>("GET", "/api/routine/versions"),
+  saveVersion: (note: string) =>
+    request<RoutineVersion>("POST", "/api/routine/versions", { note }),
 };

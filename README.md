@@ -45,10 +45,10 @@ WORKOUT_STORE=memory \
   go run ./cmd/server
 ```
 
-> Note: Google SSO needs real OAuth credentials. For pure UI work you can point
-> the frontend at a deployed backend, or add exercises via `curl` against the
-> memory store (the API only enforces auth when a session cookie check fails —
-> see `internal/auth`). For end-to-end local auth, set `GOOGLE_CLIENT_ID`,
+> Note: Google SSO needs real OAuth credentials. For pure UI work, set
+> `DEV_AUTH_EMAIL=you@local` — this bypasses auth entirely (dev only; it is
+> never set by the deploy workflow and `--set-env-vars` would clear it anyway).
+> For end-to-end local auth instead, set `GOOGLE_CLIENT_ID`,
 > `GOOGLE_CLIENT_SECRET`, `OAUTH_REDIRECT_URL=http://localhost:8080/auth/callback`,
 > `ALLOWED_EMAIL`, and `COOKIE_SECURE=false`.
 

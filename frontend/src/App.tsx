@@ -2,67 +2,50 @@ import { useEffect, useState } from "react";
 import { api, UnauthorizedError } from "./api";
 import { SignIn } from "./components/SignIn";
 import { Today } from "./components/Today";
-import { Routine } from "./components/Routine";
+import { History } from "./components/History";
 import { Stats } from "./components/Stats";
+import { Routine } from "./components/Routine";
+import { IconToday, IconHistory, IconStats, IconRoutine } from "./components/icons";
 
-type Tab = "today" | "routine" | "stats";
+type Tab = "today" | "history" | "stats" | "routine";
 type AuthState = { status: "loading" } | { status: "out" } | { status: "in"; email: string };
+
+const TABS: { id: Tab; label: string; Icon: (p: { className?: string }) => JSX.Element }[] = [
+  { id: "today", label: "Today", Icon: IconToday },
+  { id: "history", label: "History", Icon: IconHistory },
+  { id: "stats", label: "Stats", Icon: IconStats },
+  { id: "routine", label: "Routine", Icon: IconRoutine },
+];
 
 export function App() {
   const [auth, setAuth] = useState<AuthState>({ status: "loading" });
   const [tab, setTab] = useState<Tab>("today");
 
   useEffect(() => {
-    api
-      .me()
+    api.me()
       .then(({ email }) => setAuth({ status: "in", email }))
-      .catch((err) => {
-        if (err instanceof UnauthorizedError) setAuth({ status: "out" });
-        else setAuth({ status: "out" });
-      });
+      .catch((err) => setAuth({ status: err instanceof UnauthorizedError ? "out" : "out" }));
   }, []);
 
-  if (auth.status === "loading") {
-    return <div className="center muted">Loading…</div>;
-  }
-  if (auth.status === "out") {
-    return <SignIn />;
-  }
+  if (auth.status === "loading") return <div className="app"><div className="center">Loading…</div></div>;
+  if (auth.status === "out") return <div className="app"><SignIn /></div>;
 
   return (
     <div className="app">
-      <header className="topbar">
-        <h1>Workout Log</h1>
-        <button
-          className="link"
-          onClick={async () => {
-            await api.logout();
-            setAuth({ status: "out" });
-          }}
-        >
-          Sign out
-        </button>
-      </header>
-
       <main className="content">
         {tab === "today" && <Today />}
-        {tab === "routine" && <Routine />}
+        {tab === "history" && <History />}
         {tab === "stats" && <Stats />}
+        {tab === "routine" && <Routine />}
       </main>
-
       <nav className="tabbar">
-        <TabButton label="Today" active={tab === "today"} onClick={() => setTab("today")} />
-        <TabButton label="Routine" active={tab === "routine"} onClick={() => setTab("routine")} />
-        <TabButton label="Stats" active={tab === "stats"} onClick={() => setTab("stats")} />
+        {TABS.map(({ id, label, Icon }) => (
+          <button key={id} className={`tab ${tab === id ? "active" : ""}`} onClick={() => setTab(id)} aria-current={tab === id}>
+            <Icon />
+            {label}
+          </button>
+        ))}
       </nav>
     </div>
-  );
-}
-
-function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button className={active ? "tab active" : "tab"} onClick={onClick}>
-      {label}
-    </button>
   );
 }

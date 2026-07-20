@@ -15,6 +15,7 @@ type Memory struct {
 	mu        sync.RWMutex
 	exercises map[string]domain.Exercise
 	days      map[string]domain.DayLog
+	versions  []domain.RoutineVersion
 	seq       int
 }
 
@@ -115,4 +116,36 @@ func (m *Memory) ListDays(_ context.Context, from, to string) ([]domain.DayLog, 
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Date < out[j].Date })
 	return out, nil
+}
+
+func (m *Memory) ListRoutineVersions(_ context.Context) ([]domain.RoutineVersion, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]domain.RoutineVersion, len(m.versions))
+	copy(out, m.versions)
+	// newest first
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	return out, nil
+}
+
+func (m *Memory) GetRoutineVersion(_ context.Context, id string) (domain.RoutineVersion, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for _, v := range m.versions {
+		if v.ID == id {
+			return v, nil
+		}
+	}
+	return domain.RoutineVersion{}, ErrNotFound
+}
+
+func (m *Memory) CreateRoutineVersion(_ context.Context, v domain.RoutineVersion) (domain.RoutineVersion, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if v.ID == "" {
+		m.seq++
+		v.ID = "ver-" + strconv.Itoa(m.seq)
+	}
+	m.versions = append(m.versions, v)
+	return v, nil
 }

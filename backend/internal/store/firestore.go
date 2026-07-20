@@ -15,6 +15,7 @@ import (
 const (
 	exercisesCollection = "exercises"
 	daysCollection      = "days"
+	versionsCollection  = "routine_versions"
 )
 
 // Firestore is a Store backed by Google Cloud Firestore (native mode).
@@ -175,4 +176,51 @@ func (f *Firestore) ListDays(ctx context.Context, from, to string) ([]domain.Day
 		out = append(out, d)
 	}
 	return out, nil
+}
+
+func (f *Firestore) ListRoutineVersions(ctx context.Context) ([]domain.RoutineVersion, error) {
+	iter := f.client.Collection(versionsCollection).OrderBy("createdAt", firestore.Desc).Documents(ctx)
+	defer iter.Stop()
+	var out []domain.RoutineVersion
+	for {
+		doc, err := iter.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		var v domain.RoutineVersion
+		if err := doc.DataTo(&v); err != nil {
+			return nil, err
+		}
+		v.ID = doc.Ref.ID
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+func (f *Firestore) GetRoutineVersion(ctx context.Context, id string) (domain.RoutineVersion, error) {
+	doc, err := f.client.Collection(versionsCollection).Doc(id).Get(ctx)
+	if status.Code(err) == codes.NotFound {
+		return domain.RoutineVersion{}, ErrNotFound
+	}
+	if err != nil {
+		return domain.RoutineVersion{}, err
+	}
+	var v domain.RoutineVersion
+	if err := doc.DataTo(&v); err != nil {
+		return domain.RoutineVersion{}, err
+	}
+	v.ID = doc.Ref.ID
+	return v, nil
+}
+
+func (f *Firestore) CreateRoutineVersion(ctx context.Context, v domain.RoutineVersion) (domain.RoutineVersion, error) {
+	ref := f.client.Collection(versionsCollection).NewDoc()
+	v.ID = ref.ID
+	if _, err := ref.Set(ctx, v); err != nil {
+		return domain.RoutineVersion{}, err
+	}
+	return v, nil
 }

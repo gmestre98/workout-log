@@ -46,6 +46,13 @@ export interface Summary {
   perDay: DayStat[];
 }
 
+export interface RoutineVersion {
+  id: string;
+  createdAt: string; // RFC3339
+  note: string;
+  exercises: Exercise[];
+}
+
 export const UNITS: Unit[] = ["reps", "seconds", "minutes"];
 
 // Common time slots from the spreadsheet; the field is free text so users can

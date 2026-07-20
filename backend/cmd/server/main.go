@@ -64,7 +64,12 @@ func main() {
 		RedirectURL:  os.Getenv("OAUTH_REDIRECT_URL"),
 		AllowedEmail: os.Getenv("ALLOWED_EMAIL"),
 		SecureCookie: env("COOKIE_SECURE", "true") != "false",
+		// Local development only. Never set in the deploy workflow.
+		DevBypassEmail: os.Getenv("DEV_AUTH_EMAIL"),
 	}, sessions)
+	if v := os.Getenv("DEV_AUTH_EMAIL"); v != "" {
+		log.Printf("WARNING: DEV_AUTH_EMAIL set — auth is bypassed as %s (dev only)", v)
+	}
 
 	// --- routing ---
 	apiHandler := api.New(st)

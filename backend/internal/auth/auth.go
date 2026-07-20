@@ -29,6 +29,12 @@ type Config struct {
 	RedirectURL  string // e.g. https://host/auth/callback
 	AllowedEmail string // only this Google account may sign in
 	SecureCookie bool   // set Secure flag (true in production/HTTPS)
+
+	// DevBypassEmail, when non-empty, treats every request as authenticated as
+	// this email WITHOUT any cookie. It exists only for local development and
+	// UI work; it is wired solely from the DEV_AUTH_EMAIL env var and is never
+	// set by the production deploy. Leave empty in any deployed environment.
+	DevBypassEmail string
 }
 
 // Service wires the OAuth flow to the session manager.
@@ -158,6 +164,10 @@ func (s *Service) Me(w http.ResponseWriter, r *http.Request) {
 // cookie, injecting the email into the request context.
 func (s *Service) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.DevBypassEmail != "" {
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), emailKey, s.cfg.DevBypassEmail)))
+			return
+		}
 		cookie, err := r.Cookie(SessionCookieName)
 		if err != nil {
 			http.Error(w, "unauthenticated", http.StatusUnauthorized)

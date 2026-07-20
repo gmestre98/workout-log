@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
+	"time"
 
 	"github.com/gmestre98/workout-log/backend/internal/domain"
 	"github.com/gmestre98/workout-log/backend/internal/stats"
@@ -32,9 +33,13 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/exercises/{id}", h.getExercise)
 	mux.HandleFunc("PUT /api/exercises/{id}", h.updateExercise)
 	mux.HandleFunc("DELETE /api/exercises/{id}", h.deleteExercise)
+	mux.HandleFunc("GET /api/days", h.listDays)
 	mux.HandleFunc("GET /api/days/{date}", h.getDay)
 	mux.HandleFunc("PUT /api/days/{date}", h.saveDay)
 	mux.HandleFunc("GET /api/summary", h.summary)
+	mux.HandleFunc("GET /api/routine/versions", h.listVersions)
+	mux.HandleFunc("POST /api/routine/versions", h.createVersion)
+	mux.HandleFunc("GET /api/routine/versions/{id}", h.getVersion)
 	return mux
 }
 
@@ -182,6 +187,79 @@ func (h *Handler) saveDay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, d)
+}
+
+func (h *Handler) listDays(w http.ResponseWriter, r *http.Request) {
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+	if !dateRe.MatchString(from) || !dateRe.MatchString(to) {
+		writeErr(w, http.StatusBadRequest, "from and to must be YYYY-MM-DD")
+		return
+	}
+	days, err := h.store.ListDays(r.Context(), from, to)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if days == nil {
+		days = []domain.DayLog{}
+	}
+	writeJSON(w, http.StatusOK, days)
+}
+
+func (h *Handler) listVersions(w http.ResponseWriter, r *http.Request) {
+	versions, err := h.store.ListRoutineVersions(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if versions == nil {
+		versions = []domain.RoutineVersion{}
+	}
+	writeJSON(w, http.StatusOK, versions)
+}
+
+func (h *Handler) getVersion(w http.ResponseWriter, r *http.Request) {
+	v, err := h.store.GetRoutineVersion(r.Context(), r.PathValue("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "version not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
+}
+
+// createVersion snapshots the current routine. The note is optional; the
+// exercise list is always taken from the server's current state, never trusted
+// from the client.
+func (h *Handler) createVersion(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Note string `json:"note"`
+	}
+	// Body is optional; ignore decode errors on empty body.
+	_ = json.NewDecoder(r.Body).Decode(&body)
+
+	exercises, err := h.store.ListExercises(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if exercises == nil {
+		exercises = []domain.Exercise{}
+	}
+	v, err := h.store.CreateRoutineVersion(r.Context(), domain.RoutineVersion{
+		CreatedAt: time.Now().UTC(),
+		Note:      body.Note,
+		Exercises: exercises,
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, v)
 }
 
 func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {

@@ -143,3 +143,72 @@ func TestSummaryRequiresDates(t *testing.T) {
 		t.Fatalf("got %d want 400", resp.StatusCode)
 	}
 }
+
+func TestListDays(t *testing.T) {
+	srv, m := newServer()
+	defer srv.Close()
+	ctx := context.Background()
+	m.SaveDay(ctx, domain.DayLog{Date: "2026-07-03", Exercises: map[string]domain.ExerciseLog{}})
+	m.SaveDay(ctx, domain.DayLog{Date: "2026-07-10", Exercises: map[string]domain.ExerciseLog{}})
+	m.SaveDay(ctx, domain.DayLog{Date: "2026-08-01", Exercises: map[string]domain.ExerciseLog{}})
+
+	resp := do(t, http.MethodGet, srv.URL+"/api/days?from=2026-07-01&to=2026-07-31", nil)
+	var days []domain.DayLog
+	json.NewDecoder(resp.Body).Decode(&days)
+	resp.Body.Close()
+	if len(days) != 2 {
+		t.Fatalf("expected 2 July days, got %d", len(days))
+	}
+}
+
+func TestListDaysRequiresDates(t *testing.T) {
+	srv, _ := newServer()
+	defer srv.Close()
+	resp := do(t, http.MethodGet, srv.URL+"/api/days?from=bad", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("got %d want 400", resp.StatusCode)
+	}
+}
+
+func TestRoutineVersionsFlow(t *testing.T) {
+	srv, m := newServer()
+	defer srv.Close()
+	ctx := context.Background()
+	m.CreateExercise(ctx, domain.Exercise{ID: "ex-1", Name: "Pull-ups", TimeSlot: "Wake up", Unit: domain.UnitReps, PlannedSets: 4, PlannedAmount: 8, Active: true})
+
+	// snapshot current routine
+	resp := do(t, http.MethodPost, srv.URL+"/api/routine/versions", map[string]string{"note": "first cut"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create version: got %d", resp.StatusCode)
+	}
+	var created domain.RoutineVersion
+	json.NewDecoder(resp.Body).Decode(&created)
+	resp.Body.Close()
+	if created.ID == "" || len(created.Exercises) != 1 || created.Note != "first cut" {
+		t.Fatalf("unexpected version %+v", created)
+	}
+
+	// list
+	resp = do(t, http.MethodGet, srv.URL+"/api/routine/versions", nil)
+	var list []domain.RoutineVersion
+	json.NewDecoder(resp.Body).Decode(&list)
+	resp.Body.Close()
+	if len(list) != 1 {
+		t.Fatalf("expected 1 version, got %d", len(list))
+	}
+
+	// get by id
+	resp = do(t, http.MethodGet, srv.URL+"/api/routine/versions/"+created.ID, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get version: got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// missing
+	resp = do(t, http.MethodGet, srv.URL+"/api/routine/versions/nope", nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("get missing version: got %d want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+}

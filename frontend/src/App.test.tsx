@@ -9,8 +9,12 @@ vi.mock("./api", async () => {
     ...actual,
     api: {
       me: vi.fn(),
+      logout: vi.fn().mockResolvedValue(undefined),
       listExercises: vi.fn().mockResolvedValue([]),
-      getDay: vi.fn().mockResolvedValue({ date: "2026-07-18", exercises: {} }),
+      getDay: vi.fn().mockResolvedValue({ date: "2026-07-21", exercises: {} }),
+      listDays: vi.fn().mockResolvedValue([]),
+      summary: vi.fn().mockResolvedValue({ days: 0, avgCompletion: 0, daysAbove0: 0, daysAbove50: 0, perDay: [] }),
+      listVersions: vi.fn().mockResolvedValue([]),
     },
   };
 });
@@ -24,12 +28,12 @@ describe("App auth gating", () => {
     await waitFor(() => expect(screen.getByText("Sign in with Google")).toBeInTheDocument());
   });
 
-  it("shows the app tabs when authenticated", async () => {
+  it("shows the four tabs when authenticated", async () => {
     (api.me as any).mockResolvedValue({ email: "me@gmail.com" });
     render(<App />);
-    await waitFor(() => expect(screen.getByText("Sign out")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Today" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Routine" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Today" })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "History" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stats" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Routine" })).toBeInTheDocument();
   });
 });

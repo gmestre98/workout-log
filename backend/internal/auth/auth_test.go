@@ -37,6 +37,20 @@ func TestRequireAuthRejectsMissingCookie(t *testing.T) {
 	}
 }
 
+func TestDevBypassAdmitsWithoutCookie(t *testing.T) {
+	svc := NewService(Config{DevBypassEmail: "dev@local"}, NewSessionManager([]byte("s"), time.Hour))
+	var seen string
+	h := svc.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen, _ = EmailFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/exercises", nil))
+	if rec.Code != http.StatusOK || seen != "dev@local" {
+		t.Fatalf("dev bypass failed: code=%d email=%q", rec.Code, seen)
+	}
+}
+
 func TestRequireAuthAdmitsValidCookie(t *testing.T) {
 	sm := NewSessionManager([]byte("s"), time.Hour)
 	svc := NewService(Config{}, sm)
