@@ -14,8 +14,10 @@
   --ember-2: #f5852f;
   --done: #1f9d61;
   --dawn: #e0973a;
+  --morning: #e2732e;
   --noon: #ec5a24;
   --dusk: #b5486a;
+  --night: #6d5bbf;
   --track: #ddd8cf;
   --danger: #d1442b;
   --shadow: 0 10px 34px rgba(60, 40, 24, 0.12);
@@ -35,8 +37,10 @@
     --ember-2: #ff9245;
     --done: #43c68c;
     --dawn: #e9a94e;
+    --morning: #f0813e;
     --noon: #ff6a3d;
     --dusk: #d16a90;
+    --night: #8878e6;
     --track: #322922;
     --danger: #f97066;
     --shadow: 0 12px 38px rgba(0, 0, 0, 0.55);
@@ -46,15 +50,15 @@
 :root[data-theme="dark"] {
   --bg: #15110e; --surface: #211b16; --surface-2: #2c241d; --ink: #f4eee7;
   --ink-2: #ab9f92; --ink-3: #756a5e; --line: #322922; --ember: #ff6a3d;
-  --ember-2: #ff9245; --done: #43c68c; --dawn: #e9a94e; --noon: #ff6a3d;
-  --dusk: #d16a90; --track: #322922; --danger: #f97066;
+  --ember-2: #ff9245; --done: #43c68c; --dawn: #e9a94e; --morning: #f0813e;
+  --noon: #ff6a3d; --dusk: #d16a90; --night: #8878e6; --track: #322922; --danger: #f97066;
   --shadow: 0 12px 38px rgba(0,0,0,.55); --shadow-sm: 0 2px 14px rgba(0,0,0,.45);
 }
 :root[data-theme="light"] {
   --bg: #eae7e1; --surface: #faf9f6; --surface-2: #efece6; --ink: #1a1512;
   --ink-2: #6b6157; --ink-3: #9a9084; --line: #ddd8cf; --ember: #ec5a24;
-  --ember-2: #f5852f; --done: #1f9d61; --dawn: #e0973a; --noon: #ec5a24;
-  --dusk: #b5486a; --track: #ddd8cf; --danger: #d1442b;
+  --ember-2: #f5852f; --done: #1f9d61; --dawn: #e0973a; --morning: #e2732e;
+  --noon: #ec5a24; --dusk: #b5486a; --night: #6d5bbf; --track: #ddd8cf; --danger: #d1442b;
   --shadow: 0 10px 34px rgba(60,40,24,.12); --shadow-sm: 0 2px 12px rgba(60,40,24,.07);
 }
 
@@ -245,6 +249,10 @@ input, select { font-family: inherit; }
 .form input, .form select { padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 16px; color: var(--ink); background: var(--surface); }
 .form .row { display: flex; gap: 10px; }
 .form .row label { flex: 1; }
+.slotchips { display: flex; flex-wrap: wrap; gap: 7px; }
+.slotchips .chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 650; }
+.slotchips .chip.active { border-color: transparent; background: color-mix(in srgb, var(--ember) 16%, transparent); color: var(--ember); }
+.slotchips .chip.add { color: var(--ember); border-style: dashed; background: transparent; }
 .form label.check { flex-direction: row; align-items: center; gap: 9px; color: var(--ink); font-size: 14px; }
 .form label.check input { width: auto; }
 .formbtns { display: flex; gap: 10px; margin-top: 6px; }

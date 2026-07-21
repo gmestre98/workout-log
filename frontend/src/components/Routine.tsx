@@ -65,11 +65,20 @@ export function Routine() {
     return seen;
   }, [exercises]);
 
+  // Slots offered as quick-pick chips: the defaults plus any the user already
+  // has, in order — so adding a 4th/5th block is one tap once it exists.
+  const knownSlots = useMemo(() => {
+    const seen: string[] = [...DEFAULT_TIME_SLOTS];
+    for (const e of exercises) if (!seen.includes(e.timeSlot)) seen.push(e.timeSlot);
+    return seen;
+  }, [exercises]);
+
   if (draft) {
     return (
       <ExerciseForm
         draft={draft}
         setDraft={setDraft}
+        knownSlots={knownSlots}
         onSave={save}
         onCancel={() => setDraft(null)}
         onDelete={draft.id ? async () => { await remove(draft as Exercise); setDraft(null); } : undefined}
@@ -147,9 +156,13 @@ export function Routine() {
 }
 
 function ExerciseForm({
-  draft, setDraft, onSave, onCancel, onDelete, error,
-}: { draft: Draft; setDraft: (d: Draft) => void; onSave: () => void; onCancel: () => void; onDelete?: () => void; error: string }) {
+  draft, setDraft, knownSlots, onSave, onCancel, onDelete, error,
+}: { draft: Draft; setDraft: (d: Draft) => void; knownSlots: string[]; onSave: () => void; onCancel: () => void; onDelete?: () => void; error: string }) {
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft({ ...draft, [key]: value });
+  // Show every known slot as a chip, plus the current value if it's brand new.
+  const slotOptions = knownSlots.includes(draft.timeSlot) || !draft.timeSlot
+    ? knownSlots
+    : [...knownSlots, draft.timeSlot];
   return (
     <div>
       <div className="app-head">
@@ -160,8 +173,12 @@ function ExerciseForm({
       <form className="form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
         <label>Name<input value={draft.name} onChange={(e) => set("name", e.target.value)} required /></label>
         <label>Time slot
-          <input list="slots" value={draft.timeSlot} onChange={(e) => set("timeSlot", e.target.value)} required />
-          <datalist id="slots">{DEFAULT_TIME_SLOTS.map((s) => <option key={s} value={s} />)}</datalist>
+          <div className="slotchips">
+            {slotOptions.map((s) => (
+              <button type="button" key={s} className={`chip ${s === draft.timeSlot ? "active" : ""}`} onClick={() => set("timeSlot", s)}>{s}</button>
+            ))}
+          </div>
+          <input value={draft.timeSlot} onChange={(e) => set("timeSlot", e.target.value)} placeholder="Type a new block, e.g. Afternoon" required />
         </label>
         <div className="row">
           <label>Sets<input type="number" min={1} value={draft.plannedSets} onChange={(e) => set("plannedSets", Number(e.target.value))} /></label>

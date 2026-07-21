@@ -144,18 +144,19 @@ describe("heatLevel", () => {
 });
 
 describe("slotColor", () => {
-  it("maps known slot names to day-arc hues", () => {
+  it("spreads 3 slots across the arc (first=dawn, last=night)", () => {
     const order = ["Wake up", "Pre lunch", "Evening"];
     expect(slotColor("Wake up", order)).toBe("dawn");
     expect(slotColor("Pre lunch", order)).toBe("noon");
-    expect(slotColor("Evening", order)).toBe("dusk");
+    expect(slotColor("Evening", order)).toBe("night");
   });
-  it("cycles unknown slots by order", () => {
-    const order = ["Alpha", "Beta", "Gamma", "Delta"];
-    expect(slotColor("Alpha", order)).toBe("dawn");
-    expect(slotColor("Beta", order)).toBe("noon");
-    expect(slotColor("Gamma", order)).toBe("dusk");
-    expect(slotColor("Delta", order)).toBe("dawn");
+  it("spreads 5 slots across the full day arc", () => {
+    const order = ["A", "B", "C", "D", "E"];
+    expect(order.map((s) => slotColor(s, order))).toEqual(["dawn", "morning", "noon", "dusk", "night"]);
+  });
+  it("returns dawn for a single or unknown slot", () => {
+    expect(slotColor("Only", ["Only"])).toBe("dawn");
+    expect(slotColor("Missing", ["A", "B"])).toBe("dawn");
   });
 });
 

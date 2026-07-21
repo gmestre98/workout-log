@@ -55,6 +55,6 @@ export interface RoutineVersion {
 
 export const UNITS: Unit[] = ["reps", "seconds", "minutes"];
 
-// Common time slots from the spreadsheet; the field is free text so users can
-// add their own.
-export const DEFAULT_TIME_SLOTS = ["Wake up", "Pre lunch", "Evening"];
+// Suggested daily blocks offered as quick-pick chips. The field is free text,
+// so users can rename these or add their own — any number of blocks is allowed.
+export const DEFAULT_TIME_SLOTS = ["Wake up", "Pre lunch", "Afternoon", "Evening", "Night"];

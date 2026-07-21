@@ -110,17 +110,20 @@ export function heatLevel(fraction: number): 0 | 1 | 2 | 3 | 4 {
   return 4;
 }
 
-// slotColor maps a time slot to one of the day-arc hues. Known slots map by
-// name (Wake up → dawn, Pre lunch → noon, Evening → dusk); unknown slots cycle
-// by their order of appearance.
-export function slotColor(timeSlot: string, orderedSlots: string[]): "dawn" | "noon" | "dusk" {
-  const key = timeSlot.trim().toLowerCase();
-  if (key.includes("wake") || key.includes("morning") || key.includes("dawn")) return "dawn";
-  if (key.includes("lunch") || key.includes("noon") || key.includes("midday")) return "noon";
-  if (key.includes("evening") || key.includes("night") || key.includes("dusk")) return "dusk";
-  const cycle: ("dawn" | "noon" | "dusk")[] = ["dawn", "noon", "dusk"];
-  const idx = orderedSlots.indexOf(timeSlot);
-  return cycle[(idx < 0 ? 0 : idx) % 3];
+export type SlotHue = "dawn" | "morning" | "noon" | "dusk" | "night";
+const SLOT_ARC: SlotHue[] = ["dawn", "morning", "noon", "dusk", "night"];
+
+// slotColor spreads a time slot across the day's arc by its position in the
+// ordered slot list: the first slot is dawn, the last is night, and any number
+// of slots in between are distributed across the arc. So 3 blocks read
+// dawn/noon/night and 5 read dawn/morning/noon/dusk/night.
+export function slotColor(timeSlot: string, orderedSlots: string[]): SlotHue {
+  const n = orderedSlots.length;
+  if (n <= 1) return "dawn";
+  let idx = orderedSlots.indexOf(timeSlot);
+  if (idx < 0) idx = 0;
+  const pos = Math.round((idx / (n - 1)) * (SLOT_ARC.length - 1));
+  return SLOT_ARC[pos];
 }
 
 // primaryMuscle reduces a free-text muscle group to its headline (e.g.
