@@ -114,9 +114,17 @@ export function Today() {
 
       <div className="datebar">
         <button className="nav" onClick={() => setDate(addDaysISO(date, -1))} aria-label="Previous day">‹</button>
-        <div className="disp">
+        <label className="disp" style={{ position: "relative", cursor: "pointer" }}>
           <span className="dow">{date === today ? "Today" : hdr.dow}</span><br />{hdr.label}
-        </div>
+          <input
+            type="date"
+            value={date}
+            max={today}
+            onChange={(e) => e.target.value && setDate(e.target.value)}
+            aria-label="Jump to a date"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", cursor: "pointer" }}
+          />
+        </label>
         <button className="nav" onClick={() => setDate(addDaysISO(date, 1))} aria-label="Next day" disabled={date >= today} style={date >= today ? { opacity: 0.4 } : undefined}>›</button>
       </div>
 
