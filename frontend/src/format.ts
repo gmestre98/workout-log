@@ -70,6 +70,12 @@ export function newLog(exercise: {
   };
 }
 
+// setAllSets returns a copy of the log with every set marked completed or not —
+// used by the "mark all done" shortcut, which makes backfilling full days fast.
+export function setAllSets(log: ExerciseLog, completed: boolean): ExerciseLog {
+  return { ...log, sets: log.sets.map((s) => ({ ...s, completed })) };
+}
+
 // dayCompletion mirrors the backend DayAverage: the mean completion across the
 // given (active) exercises for one day; a missing log counts as 0%.
 export function dayCompletion(exercises: Exercise[], day: DayLog | undefined): number {

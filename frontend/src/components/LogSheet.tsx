@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Exercise, ExerciseLog } from "../types";
-import { exerciseCompletion, formatPercent, unitLabel } from "../format";
+import { exerciseCompletion, formatPercent, setAllSets, unitLabel } from "../format";
 import { IconCheck, IconTimer } from "./icons";
 
 export function LogSheet({
@@ -18,6 +18,8 @@ export function LogSheet({
   const pct = exerciseCompletion(log);
   const [restLeft, setRestLeft] = useState<number | null>(null);
   const firstIncomplete = log.sets.findIndex((s) => !s.completed);
+  const allDone = log.sets.length > 0 && log.sets.every((s) => s.completed);
+  const toggleAll = () => onChange((l) => setAllSets(l, !allDone));
 
   // Rest countdown; starts when a set is completed and restSeconds > 0.
   useEffect(() => {
@@ -63,8 +65,13 @@ export function LogSheet({
               {exercise.restSeconds > 0 ? ` · ${exercise.restSeconds}s rest` : ""}
             </div>
           </div>
-          <div className={`ex-pct num ${pct >= 1 ? "g" : pct > 0 ? "a" : "z"}`} style={{ fontSize: 21 }}>
-            {formatPercent(pct)}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+            <div className={`ex-pct num ${pct >= 1 ? "g" : pct > 0 ? "a" : "z"}`} style={{ fontSize: 21 }}>
+              {formatPercent(pct)}
+            </div>
+            <button className="link" style={{ padding: 0 }} onClick={toggleAll}>
+              {allDone ? "Clear all" : "Mark all done"}
+            </button>
           </div>
         </div>
 

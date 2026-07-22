@@ -6,6 +6,7 @@ import {
   todayISO,
   monthRange,
   newLog,
+  setAllSets,
   dayCompletion,
   addDaysISO,
   computeStreak,
@@ -95,6 +96,17 @@ describe("newLog", () => {
     expect(log.sets).toHaveLength(3);
     expect(log.sets.every((s) => !s.completed && s.actualAmount === 12)).toBe(true);
     expect(log.exerciseId).toBe("ex-1");
+  });
+});
+
+describe("setAllSets", () => {
+  it("marks every set completed or not, preserving amounts", () => {
+    const log = newLog({ id: "a", plannedSets: 3, plannedAmount: 10, unit: "reps" });
+    const done = setAllSets(log, true);
+    expect(done.sets.every((s) => s.completed && s.actualAmount === 10)).toBe(true);
+    expect(setAllSets(done, false).sets.every((s) => !s.completed)).toBe(true);
+    // original is untouched
+    expect(log.sets.every((s) => !s.completed)).toBe(true);
   });
 });
 
