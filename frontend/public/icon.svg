@@ -1,5 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#2f3aa8"/>
+  <defs>
+    <radialGradient id="ember" cx="30%" cy="18%" r="110%">
+      <stop offset="0" stop-color="#ff9245"/>
+      <stop offset="0.55" stop-color="#ec5a24"/>
+      <stop offset="1" stop-color="#b23c17"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#ember)"/>
   <g fill="#fff">
     <rect x="70" y="216" width="70" height="80" rx="16"/>
     <rect x="372" y="216" width="70" height="80" rx="16"/>

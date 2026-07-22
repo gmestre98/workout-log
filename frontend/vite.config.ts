@@ -19,7 +19,7 @@ export default defineConfig({
       },
       manifest: {
         name: "Workout Log",
-        short_name: "Workouts",
+        short_name: "Workout Log",
         description: "Track your daily workout routine, dawn to dusk",
         theme_color: "#15110e",
         background_color: "#15110e",
