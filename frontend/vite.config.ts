@@ -10,7 +10,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "icon.svg"],
+      includeAssets: ["favicon.svg", "apple-touch-icon.png"],
       workbox: {
         // The service worker's SPA navigation fallback must NOT swallow server
         // routes: /auth/* (Google OAuth redirects) and /api/* must hit the
@@ -20,14 +20,15 @@ export default defineConfig({
       manifest: {
         name: "Workout Log",
         short_name: "Workouts",
-        description: "Track your daily workout routine",
-        theme_color: "#2f3aa8",
-        background_color: "#ffffff",
+        description: "Track your daily workout routine, dawn to dusk",
+        theme_color: "#15110e",
+        background_color: "#15110e",
         display: "standalone",
         start_url: "/",
         icons: [
-          { src: "icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
-          { src: "icon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
+          { src: "icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
     }),

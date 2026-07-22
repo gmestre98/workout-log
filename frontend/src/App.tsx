@@ -5,6 +5,7 @@ import { Today } from "./components/Today";
 import { History } from "./components/History";
 import { Stats } from "./components/Stats";
 import { Routine } from "./components/Routine";
+import { InstallPrompt } from "./components/InstallPrompt";
 import { IconToday, IconHistory, IconStats, IconRoutine } from "./components/icons";
 
 type Tab = "today" | "history" | "stats" | "routine";
@@ -38,6 +39,7 @@ export function App() {
         {tab === "stats" && <Stats />}
         {tab === "routine" && <Routine />}
       </main>
+      {tab === "today" && <InstallPrompt />}
       <nav className="tabbar">
         {TABS.map(({ id, label, Icon }) => (
           <button key={id} className={`tab ${tab === id ? "active" : ""}`} onClick={() => setTab(id)} aria-current={tab === id}>
