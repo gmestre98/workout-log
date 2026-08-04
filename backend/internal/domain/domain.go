@@ -70,11 +70,34 @@ func NewDayLog(date string) DayLog {
 	return DayLog{Date: date, Exercises: map[string]ExerciseLog{}}
 }
 
+// VersionStatus describes where a routine version sits in the user's timeline:
+// the one currently in use, a plan for later, or an archived past routine.
+type VersionStatus string
+
+const (
+	StatusCurrent VersionStatus = "current"
+	StatusFuture  VersionStatus = "future"
+	StatusPast    VersionStatus = "past"
+)
+
+// Valid reports whether s is a known status.
+func (s VersionStatus) Valid() bool {
+	switch s {
+	case StatusCurrent, StatusFuture, StatusPast:
+		return true
+	default:
+		return false
+	}
+}
+
 // RoutineVersion is a saved snapshot of the whole routine at a point in time,
-// so past configurations are never lost and can be reviewed or compared.
+// so past configurations are never lost and can be reviewed or compared. Status
+// marks which one is current (in use), planned (future) or archived (past); at
+// most one version is current at a time.
 type RoutineVersion struct {
-	ID        string     `json:"id" firestore:"-"`
-	CreatedAt time.Time  `json:"createdAt" firestore:"createdAt"`
-	Note      string     `json:"note" firestore:"note"`
-	Exercises []Exercise `json:"exercises" firestore:"exercises"`
+	ID        string        `json:"id" firestore:"-"`
+	CreatedAt time.Time     `json:"createdAt" firestore:"createdAt"`
+	Note      string        `json:"note" firestore:"note"`
+	Status    VersionStatus `json:"status" firestore:"status"`
+	Exercises []Exercise    `json:"exercises" firestore:"exercises"`
 }

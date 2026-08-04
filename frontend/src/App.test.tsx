@@ -15,6 +15,10 @@ vi.mock("./api", async () => {
       listDays: vi.fn().mockResolvedValue([]),
       summary: vi.fn().mockResolvedValue({ days: 0, avgCompletion: 0, daysAbove0: 0, daysAbove50: 0, perDay: [] }),
       listVersions: vi.fn().mockResolvedValue([]),
+      saveVersion: vi.fn().mockResolvedValue({}),
+      deleteVersion: vi.fn().mockResolvedValue(undefined),
+      setVersionStatus: vi.fn().mockResolvedValue({}),
+      activateVersion: vi.fn().mockResolvedValue({}),
     },
   };
 });

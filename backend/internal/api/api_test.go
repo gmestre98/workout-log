@@ -205,10 +205,101 @@ func TestRoutineVersionsFlow(t *testing.T) {
 	}
 	resp.Body.Close()
 
+	// saving as current should have marked it current
+	if created.Status != domain.StatusCurrent {
+		t.Fatalf("expected new version current, got %q", created.Status)
+	}
+
 	// missing
 	resp = do(t, http.MethodGet, srv.URL+"/api/routine/versions/nope", nil)
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("get missing version: got %d want 404", resp.StatusCode)
 	}
 	resp.Body.Close()
+}
+
+func TestVersionStatusActivateDelete(t *testing.T) {
+	srv, m := newServer()
+	defer srv.Close()
+	ctx := context.Background()
+	m.CreateExercise(ctx, domain.Exercise{ID: "ex-1", Name: "Pull-ups", TimeSlot: "Wake up", Unit: domain.UnitReps, PlannedSets: 4, PlannedAmount: 8, Active: true})
+
+	// v1 saved as current
+	v1 := createVersion(t, srv.URL, "v1", domain.StatusCurrent)
+
+	// Change the live routine, then save v2 as a future plan.
+	m.ReplaceExercises(ctx, []domain.Exercise{{ID: "ex-2", Name: "Squats", TimeSlot: "Evening", Unit: domain.UnitReps, PlannedSets: 3, PlannedAmount: 12, Active: true}})
+	v2 := createVersion(t, srv.URL, "v2", domain.StatusFuture)
+	if v2.Status != domain.StatusFuture {
+		t.Fatalf("v2 status: got %q want future", v2.Status)
+	}
+
+	// Relabel via status endpoint; making it current directly is rejected.
+	resp := do(t, http.MethodPut, srv.URL+"/api/routine/versions/"+v2.ID+"/status", map[string]string{"status": "current"})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status=current should be rejected, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Activate v1: its single exercise should replace the live routine, and it
+	// becomes current while any prior current is demoted.
+	resp = do(t, http.MethodPost, srv.URL+"/api/routine/versions/"+v1.ID+"/activate", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("activate v1: got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	exs, _ := m.ListExercises(ctx)
+	if len(exs) != 1 || exs[0].ID != "ex-1" {
+		t.Fatalf("activate did not restore v1 exercises: %+v", exs)
+	}
+
+	// Now activate v2; v1 must become past.
+	resp = do(t, http.MethodPost, srv.URL+"/api/routine/versions/"+v2.ID+"/activate", nil)
+	resp.Body.Close()
+	list := listVersions(t, srv.URL)
+	byID := map[string]domain.VersionStatus{}
+	for _, v := range list {
+		byID[v.ID] = v.Status
+	}
+	if byID[v2.ID] != domain.StatusCurrent || byID[v1.ID] != domain.StatusPast {
+		t.Fatalf("statuses after activate: v1=%q v2=%q", byID[v1.ID], byID[v2.ID])
+	}
+
+	// Delete v1.
+	resp = do(t, http.MethodDelete, srv.URL+"/api/routine/versions/"+v1.ID, nil)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete v1: got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if len(listVersions(t, srv.URL)) != 1 {
+		t.Fatalf("expected 1 version after delete")
+	}
+
+	// Deleting a missing version 404s.
+	resp = do(t, http.MethodDelete, srv.URL+"/api/routine/versions/nope", nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("delete missing: got %d want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func createVersion(t *testing.T, base, note string, s domain.VersionStatus) domain.RoutineVersion {
+	t.Helper()
+	resp := do(t, http.MethodPost, base+"/api/routine/versions", map[string]string{"note": note, "status": string(s)})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create version %q: got %d", note, resp.StatusCode)
+	}
+	var v domain.RoutineVersion
+	json.NewDecoder(resp.Body).Decode(&v)
+	resp.Body.Close()
+	return v
+}
+
+func listVersions(t *testing.T, base string) []domain.RoutineVersion {
+	t.Helper()
+	resp := do(t, http.MethodGet, base+"/api/routine/versions", nil)
+	var list []domain.RoutineVersion
+	json.NewDecoder(resp.Body).Decode(&list)
+	resp.Body.Close()
+	return list
 }

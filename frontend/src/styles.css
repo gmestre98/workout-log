@@ -285,3 +285,78 @@ input, select { font-family: inherit; }
 .install-banner .txt span { font-size: 12px; color: var(--ink-2); }
 .install-banner .act { display: flex; align-items: center; gap: 4px; flex: none; }
 .install-banner .x { width: 30px; height: 30px; border-radius: 9px; border: none; background: transparent; color: var(--ink-3); font-size: 15px; }
+
+/* Modal (replaces native confirm/prompt) */
+.modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.5); z-index: 60; animation: fade .18s ease; }
+.modal {
+  position: absolute; left: 16px; right: 16px; top: 50%; transform: translateY(-50%);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 22px;
+  box-shadow: var(--shadow); padding: 20px; z-index: 70; max-height: 86%; overflow-y: auto;
+  animation: pop .2s cubic-bezier(.2,.8,.2,1);
+}
+@keyframes pop { from { opacity: 0; transform: translateY(-50%) scale(.96); } }
+@media (prefers-reduced-motion: reduce) { .modal, .modal-backdrop { animation: none; } }
+.modal-title { font-size: 18px; font-weight: 820; letter-spacing: -.02em; margin-bottom: 8px; }
+.modal-msg { font-size: 14px; color: var(--ink-2); line-height: 1.5; margin-bottom: 16px; }
+.modal-btns { display: flex; gap: 10px; margin-top: 18px; }
+.modal-btns .btn { flex: 1; }
+.btn.danger-solid { border: none; color: #fff; background: var(--danger); box-shadow: 0 10px 22px color-mix(in srgb, var(--danger) 34%, transparent); }
+
+/* Segmented choice (save-version dialog) */
+.segmented { display: flex; gap: 8px; }
+.segmented .seg {
+  flex: 1; display: flex; flex-direction: column; gap: 1px; align-items: flex-start;
+  border: 1.5px solid var(--line); background: var(--surface); border-radius: 13px; padding: 10px 12px; color: var(--ink-2);
+}
+.segmented .seg b { font-size: 14px; color: var(--ink); }
+.segmented .seg span { font-size: 11px; }
+.segmented .seg.active { border-color: transparent; background: color-mix(in srgb, var(--ember) 14%, transparent); }
+.segmented .seg.active b { color: var(--ember); }
+
+/* Toaster */
+.toaster {
+  position: absolute; left: 0; right: 0; bottom: calc(80px + env(safe-area-inset-bottom));
+  z-index: 80; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; padding: 0 16px;
+}
+.toast {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: 9px; max-width: 100%;
+  background: var(--ink); color: var(--surface); border: none; border-radius: 13px;
+  padding: 11px 15px; font-size: 13.5px; font-weight: 650; box-shadow: var(--shadow);
+  animation: slideup .24s cubic-bezier(.2,.8,.2,1);
+}
+.toast.error { background: var(--danger); color: #fff; }
+.toast-ic { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 999px; background: color-mix(in srgb, var(--done) 90%, transparent); color: #fff; font-weight: 800; font-size: 12px; flex: none; }
+.toast.error .toast-ic { background: rgba(255,255,255,.25); }
+.toast-ic svg { width: 12px; height: 12px; }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* Workout clock */
+.clock { padding: 15px 16px; margin-bottom: 12px; }
+.clock-main { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.clock-total { display: flex; flex-direction: column; }
+.clock-lab { font-family: var(--mono); font-size: 10.5px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .08em; }
+.clock-big { font-size: 34px; font-weight: 760; letter-spacing: -.02em; line-height: 1.05; margin-top: 2px; }
+.clock-actions { display: flex; gap: 8px; flex: none; }
+.clock-btn {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--ink); border-radius: 12px; padding: 9px 14px; font-size: 13.5px; font-weight: 700;
+}
+.clock-btn.primary { border: none; color: #fff; background: radial-gradient(140% 140% at 30% 10%, var(--ember-2), var(--ember)); box-shadow: 0 10px 20px color-mix(in srgb, var(--ember) 34%, transparent); }
+.clock-btn.ghost { background: var(--bg); color: var(--ink-2); }
+.clock-ic { font-size: 11px; line-height: 1; }
+.clock-split { display: flex; gap: 10px; margin-top: 14px; }
+.clock-seg { flex: 1; display: flex; flex-direction: column; gap: 1px; background: var(--bg); border-radius: 13px; padding: 10px 12px; }
+.clock-seg-n { font-size: 18px; font-weight: 720; }
+.clock-seg-l { font-size: 10.5px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .05em; }
+
+/* Version cards */
+.pillbadge.current { color: var(--done); background: color-mix(in srgb, var(--done) 16%, transparent); }
+.pillbadge.future { color: var(--ember); background: color-mix(in srgb, var(--ember) 15%, transparent); }
+.pillbadge.past { color: var(--ink-2); background: var(--surface-2); }
+.version { padding: 14px 15px; margin-bottom: 10px; }
+.version.is-current { border-color: color-mix(in srgb, var(--done) 45%, transparent); }
+.version-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.version-date { font-size: 14.5px; font-weight: 720; }
+.version-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.version-actions .link { padding: 2px 0; }
+.version-actions-r { display: flex; align-items: center; gap: 14px; margin-left: auto; }

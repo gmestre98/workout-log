@@ -126,6 +126,44 @@ func (f *Firestore) DeleteExercise(ctx context.Context, id string) error {
 	return err
 }
 
+func (f *Firestore) ReplaceExercises(ctx context.Context, exs []domain.Exercise) error {
+	col := f.client.Collection(exercisesCollection)
+	// Delete every existing exercise, then write the snapshot. Not a single
+	// transaction, but the collection is tiny and this only runs on an explicit
+	// "set current version" action.
+	iter := col.Documents(ctx)
+	defer iter.Stop()
+	var refs []*firestore.DocumentRef
+	for {
+		doc, err := iter.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		refs = append(refs, doc.Ref)
+	}
+	for _, ref := range refs {
+		if _, err := ref.Delete(ctx); err != nil {
+			return err
+		}
+	}
+	for _, e := range exs {
+		var ref *firestore.DocumentRef
+		if e.ID != "" {
+			ref = col.Doc(e.ID)
+		} else {
+			ref = col.NewDoc()
+			e.ID = ref.ID
+		}
+		if _, err := ref.Set(ctx, e); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (f *Firestore) GetDay(ctx context.Context, date string) (domain.DayLog, error) {
 	doc, err := f.client.Collection(daysCollection).Doc(date).Get(ctx)
 	if status.Code(err) == codes.NotFound {
@@ -223,4 +261,58 @@ func (f *Firestore) CreateRoutineVersion(ctx context.Context, v domain.RoutineVe
 		return domain.RoutineVersion{}, err
 	}
 	return v, nil
+}
+
+func (f *Firestore) DeleteRoutineVersion(ctx context.Context, id string) error {
+	ref := f.client.Collection(versionsCollection).Doc(id)
+	if _, err := ref.Get(ctx); status.Code(err) == codes.NotFound {
+		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	_, err := ref.Delete(ctx)
+	return err
+}
+
+func (f *Firestore) SetRoutineVersionStatus(ctx context.Context, id string, vs domain.VersionStatus) error {
+	col := f.client.Collection(versionsCollection)
+	ref := col.Doc(id)
+	if _, err := ref.Get(ctx); status.Code(err) == codes.NotFound {
+		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	// Enforce a single current version: demote any other current to past first.
+	if vs == domain.StatusCurrent {
+		iter := col.Where("status", "==", string(domain.StatusCurrent)).Documents(ctx)
+		defer iter.Stop()
+		for {
+			doc, err := iter.Next()
+			if errors.Is(err, iterator.Done) {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			if doc.Ref.ID == id {
+				continue
+			}
+			if _, err := doc.Ref.Update(ctx, []firestore.Update{{Path: "status", Value: string(domain.StatusPast)}}); err != nil {
+				return err
+			}
+		}
+	}
+	_, err := ref.Update(ctx, []firestore.Update{{Path: "status", Value: string(vs)}})
+	return err
+}
+
+func (f *Firestore) UpdateRoutineVersionNote(ctx context.Context, id, note string) error {
+	ref := f.client.Collection(versionsCollection).Doc(id)
+	if _, err := ref.Get(ctx); status.Code(err) == codes.NotFound {
+		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	_, err := ref.Update(ctx, []firestore.Update{{Path: "note", Value: note}})
+	return err
 }

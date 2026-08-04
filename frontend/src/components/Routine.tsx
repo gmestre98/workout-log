@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { Exercise, RoutineVersion, Unit } from "../types";
+import type { Exercise, RoutineVersion, Unit, VersionStatus } from "../types";
 import { DEFAULT_TIME_SLOTS, UNITS } from "../types";
 import { primaryMuscle, slotColor } from "../format";
+import { toast } from "../toast";
+import { ConfirmDialog, Modal } from "./Modal";
 import { IconPlus } from "./icons";
 
 type Draft = Omit<Exercise, "id"> & { id?: string };
@@ -18,13 +20,24 @@ const fmtDate = (iso: string) => {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 };
 
+const STATUS_META: Record<VersionStatus, { label: string; cls: string }> = {
+  current: { label: "In use", cls: "current" },
+  future: { label: "Planned", cls: "future" },
+  past: { label: "Past", cls: "past" },
+};
+
 export function Routine() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [versions, setVersions] = useState<RoutineVersion[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [savingVersion, setSavingVersion] = useState(false);
+
+  // Version dialogs.
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [activateFor, setActivateFor] = useState<RoutineVersion | null>(null);
+  const [deleteFor, setDeleteFor] = useState<RoutineVersion | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -46,17 +59,49 @@ export function Routine() {
   };
 
   const remove = async (ex: Exercise) => {
-    if (!confirm(`Delete "${ex.name}"?`)) return;
     try { await api.deleteExercise(ex.id); load(); }
     catch (e: any) { setError(String(e.message ?? e)); }
   };
 
-  const saveVersion = async () => {
-    const note = prompt("Describe this version (optional):", "") ?? "";
-    setSavingVersion(true);
-    try { await api.saveVersion(note); load(); }
-    catch (e: any) { setError(String(e.message ?? e)); }
-    finally { setSavingVersion(false); }
+  const doSaveVersion = async (note: string, status: VersionStatus) => {
+    setBusy(true);
+    try {
+      await api.saveVersion(note, status);
+      setSaveOpen(false);
+      toast(status === "future" ? "Saved as a future version" : "Version saved");
+      load();
+    } catch (e: any) { setError(String(e.message ?? e)); }
+    finally { setBusy(false); }
+  };
+
+  const doActivate = async (v: RoutineVersion) => {
+    setBusy(true);
+    try {
+      await api.activateVersion(v.id);
+      setActivateFor(null);
+      toast("Now using this version");
+      load();
+    } catch (e: any) { setError(String(e.message ?? e)); }
+    finally { setBusy(false); }
+  };
+
+  const doDeleteVersion = async (v: RoutineVersion) => {
+    setBusy(true);
+    try {
+      await api.deleteVersion(v.id);
+      setDeleteFor(null);
+      toast("Version deleted");
+      load();
+    } catch (e: any) { setError(String(e.message ?? e)); }
+    finally { setBusy(false); }
+  };
+
+  const relabel = async (v: RoutineVersion, status: "future" | "past") => {
+    try {
+      await api.setVersionStatus(v.id, status);
+      toast(status === "future" ? "Moved to future plans" : "Archived to past");
+      load();
+    } catch (e: any) { setError(String(e.message ?? e)); }
   };
 
   const orderedSlots = useMemo(() => {
@@ -117,7 +162,7 @@ export function Routine() {
               <div key={ex.id} className="card rl" style={ex.active ? undefined : { opacity: 0.55 }}>
                 <div className="body">
                   <div className="n">{ex.name}{!ex.active && <span className="pillbadge" style={{ marginLeft: 6 }}>off</span>}</div>
-                  <div className="m">{ex.plannedSets} × {ex.plannedAmount} {ex.unit === "reps" ? "" : ex.unit === "seconds" ? "s" : "min"}{ex.note ? ` · ${ex.note}` : ""}</div>
+                  <div className="m">{ex.plannedSets} × {ex.plannedAmount} {ex.unit === "reps" ? "" : ex.unit === "seconds" ? "s" : "min"}{ex.restSeconds > 0 ? ` · ${ex.restSeconds}s rest` : ""}{ex.note ? ` · ${ex.note}` : ""}</div>
                 </div>
                 {ex.muscleGroup && <span className="pillbadge">{primaryMuscle(ex.muscleGroup)}</span>}
                 <button className="link" onClick={() => setDraft({ ...ex })}>Edit</button>
@@ -127,37 +172,144 @@ export function Routine() {
         );
       })}
 
-      <div className="slot-head" style={{ marginTop: 20 }}>
-        <span className="slot-title">Configuration history</span>
-        <button className="link" onClick={saveVersion} disabled={savingVersion}>{savingVersion ? "Saving…" : "Save version"}</button>
+      <div className="slot-head" style={{ marginTop: 22 }}>
+        <span className="slot-title">Workout versions</span>
+        <button className="link" onClick={() => setSaveOpen(true)}>Save version</button>
       </div>
-      <div className="card" style={{ padding: 15 }}>
-        {versions.length === 0 ? (
+      {versions.length === 0 ? (
+        <div className="card" style={{ padding: 15 }}>
           <p className="tiny muted" style={{ textAlign: "center", padding: "8px 0" }}>
-            No saved versions yet. Save one to snapshot your current routine — you can look back on past configurations anytime.
+            No versions yet. Save one to snapshot your current routine — then keep past, current and future plans side by side and switch between them anytime.
           </p>
-        ) : (
-          <div className="tl">
-            {versions.map((v, i) => (
-              <div key={v.id} className={`node ${i === 0 ? "" : "old"}`}>
-                <div className="vlabel">
-                  {fmtDate(v.createdAt)}
-                  {i === 0 && <span className="pillbadge done">latest</span>}
-                </div>
-                <div className="tiny muted">{v.exercises.length} exercises{v.note ? ` · ${v.note}` : ""}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        versions.map((v) => (
+          <VersionCard
+            key={v.id}
+            version={v}
+            onActivate={() => setActivateFor(v)}
+            onRelabel={(s) => relabel(v, s)}
+            onDelete={() => setDeleteFor(v)}
+          />
+        ))
+      )}
+
       <div className="scroll-pad" />
+
+      {saveOpen && (
+        <SaveVersionDialog busy={busy} onSave={doSaveVersion} onCancel={() => setSaveOpen(false)} />
+      )}
+      {activateFor && (
+        <ConfirmDialog
+          title="Use this version?"
+          message={`Your routine will be replaced with this ${activateFor.exercises.length}-exercise version${activateFor.note ? ` (“${activateFor.note}”)` : ""}. Your logged history is untouched.`}
+          confirmLabel="Use it"
+          busy={busy}
+          onConfirm={() => doActivate(activateFor)}
+          onCancel={() => setActivateFor(null)}
+        />
+      )}
+      {deleteFor && (
+        <ConfirmDialog
+          title="Delete version?"
+          message={`This permanently removes the saved version from ${fmtDate(deleteFor.createdAt)}. Your routine and logged history are not affected.`}
+          confirmLabel="Delete"
+          danger
+          busy={busy}
+          onConfirm={() => doDeleteVersion(deleteFor)}
+          onCancel={() => setDeleteFor(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function VersionCard({
+  version, onActivate, onRelabel, onDelete,
+}: {
+  version: RoutineVersion;
+  onActivate: () => void;
+  onRelabel: (status: "future" | "past") => void;
+  onDelete: () => void;
+}) {
+  const meta = STATUS_META[version.status] ?? STATUS_META.past;
+  const isCurrent = version.status === "current";
+  return (
+    <div className={`card version ${isCurrent ? "is-current" : ""}`}>
+      <div className="version-top">
+        <div>
+          <div className="version-date num">{fmtDate(version.createdAt)}</div>
+          <div className="tiny muted">{version.exercises.length} exercises{version.note ? ` · ${version.note}` : ""}</div>
+        </div>
+        <span className={`pillbadge ${meta.cls}`}>{meta.label}</span>
+      </div>
+      <div className="version-actions">
+        {isCurrent ? (
+          <span className="tiny muted">Currently in use</span>
+        ) : (
+          <button className="link" onClick={onActivate}>Set as current</button>
+        )}
+        <div className="version-actions-r">
+          {version.status !== "future" && !isCurrent && (
+            <button className="link" onClick={() => onRelabel("future")}>Move to future</button>
+          )}
+          {version.status !== "past" && !isCurrent && (
+            <button className="link" onClick={() => onRelabel("past")}>Archive</button>
+          )}
+          <button className="link danger" onClick={onDelete}>Delete</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SaveVersionDialog({
+  busy, onSave, onCancel,
+}: {
+  busy: boolean;
+  onSave: (note: string, status: VersionStatus) => void;
+  onCancel: () => void;
+}) {
+  const [note, setNote] = useState("");
+  const [status, setStatus] = useState<VersionStatus>("current");
+  return (
+    <Modal title="Save workout version" onClose={busy ? undefined : onCancel}>
+      <p className="modal-msg">Snapshots your current routine so you can look back on it or switch to it later.</p>
+      <div className="form" style={{ gap: 14 }}>
+        <label>Name / note (optional)
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Winter block, deload week" autoFocus />
+        </label>
+        <div className="segmented">
+          <button
+            type="button"
+            className={`seg ${status === "current" ? "active" : ""}`}
+            onClick={() => setStatus("current")}
+          >
+            <b>Current</b><span>Using it now</span>
+          </button>
+          <button
+            type="button"
+            className={`seg ${status === "future" ? "active" : ""}`}
+            onClick={() => setStatus("future")}
+          >
+            <b>Future</b><span>A plan for later</span>
+          </button>
+        </div>
+      </div>
+      <div className="modal-btns">
+        <button className="btn ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button className="btn primary" onClick={() => onSave(note.trim(), status)} disabled={busy}>
+          {busy ? "Saving…" : "Save version"}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
 function ExerciseForm({
   draft, setDraft, knownSlots, onSave, onCancel, onDelete, error,
 }: { draft: Draft; setDraft: (d: Draft) => void; knownSlots: string[]; onSave: () => void; onCancel: () => void; onDelete?: () => void; error: string }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft({ ...draft, [key]: value });
   // Show every known slot as a chip, plus the current value if it's brand new.
   const slotOptions = knownSlots.includes(draft.timeSlot) || !draft.timeSlot
@@ -191,7 +343,7 @@ function ExerciseForm({
         </div>
         <label>Note (e.g. "per leg")<input value={draft.note} onChange={(e) => set("note", e.target.value)} /></label>
         <div className="row">
-          <label>Rest (seconds)<input type="number" min={0} value={draft.restSeconds} onChange={(e) => set("restSeconds", Number(e.target.value))} /></label>
+          <label>Rest between sets (seconds)<input type="number" min={0} value={draft.restSeconds} onChange={(e) => set("restSeconds", Number(e.target.value))} /></label>
           <label>Equipment<input value={draft.equipment} onChange={(e) => set("equipment", e.target.value)} /></label>
         </div>
         <label>Target muscle group<input value={draft.muscleGroup} onChange={(e) => set("muscleGroup", e.target.value)} /></label>
@@ -200,9 +352,19 @@ function ExerciseForm({
           <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
           <button type="submit" className="btn primary">Save</button>
         </div>
-        {onDelete && <button type="button" className="btn danger block" style={{ marginTop: 4 }} onClick={onDelete}>Delete exercise</button>}
+        {onDelete && <button type="button" className="btn danger block" style={{ marginTop: 4 }} onClick={() => setConfirmDelete(true)}>Delete exercise</button>}
       </form>
       <div className="scroll-pad" />
+      {confirmDelete && onDelete && (
+        <ConfirmDialog
+          title="Delete exercise?"
+          message={`“${draft.name}” will be removed from your routine. Logged history for it stays intact.`}
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => { setConfirmDelete(false); onDelete(); }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
     </div>
   );
 }

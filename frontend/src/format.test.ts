@@ -15,6 +15,7 @@ import {
   primaryMuscle,
   muscleBreakdown,
   dayHeader,
+  formatDuration,
 } from "./format";
 import type { DayLog, Exercise } from "./types";
 
@@ -66,6 +67,20 @@ describe("formatPercent", () => {
     expect(formatPercent(0.5625)).toBe("56%");
     expect(formatPercent(1)).toBe("100%");
     expect(formatPercent(0)).toBe("0%");
+  });
+});
+
+describe("formatDuration", () => {
+  it("shows m:ss under an hour", () => {
+    expect(formatDuration(0)).toBe("0:00");
+    expect(formatDuration(9_000)).toBe("0:09");
+    expect(formatDuration(90_000)).toBe("1:30");
+    expect(formatDuration(59 * 60_000 + 59_000)).toBe("59:59");
+  });
+  it("shows h:mm:ss once past an hour and clamps negatives", () => {
+    expect(formatDuration(3_600_000)).toBe("1:00:00");
+    expect(formatDuration(3_661_000)).toBe("1:01:01");
+    expect(formatDuration(-5000)).toBe("0:00");
   });
 });
 
