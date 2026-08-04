@@ -1,36 +1,53 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Exercise, ExerciseLog } from "../types";
 import { exerciseCompletion, formatPercent, setAllSets, unitLabel } from "../format";
+import { workoutClock } from "../timer";
 import { IconCheck, IconTimer } from "./icons";
 
 export function LogSheet({
   exercise,
   log,
+  date,
   onChange,
   onClose,
 }: {
   exercise: Exercise;
   log: ExerciseLog;
+  date: string;
   onChange: (mutate: (log: ExerciseLog) => ExerciseLog) => void;
   onClose: () => void;
 }) {
   const suffix = unitLabel(exercise.unit);
   const pct = exerciseCompletion(log);
   const [restLeft, setRestLeft] = useState<number | null>(null);
+  const resting = useRef(false);
   const firstIncomplete = log.sets.findIndex((s) => !s.completed);
   const allDone = log.sets.length > 0 && log.sets.every((s) => s.completed);
   const toggleAll = () => onChange((l) => setAllSets(l, !allDone));
+
+  // Ends the current rest segment in both the local countdown and the shared
+  // workout clock, so the clock's "Rest" total reflects real rest taken.
+  const endRest = () => {
+    setRestLeft(null);
+    if (resting.current) {
+      resting.current = false;
+      workoutClock.stopRest(date);
+    }
+  };
 
   // Rest countdown; starts when a set is completed and restSeconds > 0.
   useEffect(() => {
     if (restLeft === null) return;
     if (restLeft <= 0) {
-      setRestLeft(null);
+      endRest();
       return;
     }
     const t = setTimeout(() => setRestLeft((v) => (v === null ? null : v - 1)), 1000);
     return () => clearTimeout(t);
   }, [restLeft]);
+
+  // If the sheet is closed mid-rest, fold the elapsed rest into the clock.
+  useEffect(() => () => { if (resting.current) workoutClock.stopRest(date); }, [date]);
 
   const toggle = (i: number) => {
     let willComplete = false;
@@ -39,7 +56,16 @@ export function LogSheet({
       const sets = l.sets.map((s, idx) => (idx === i ? { ...s, completed: !s.completed } : s));
       return { ...l, sets };
     });
-    if (willComplete && exercise.restSeconds > 0) setRestLeft(exercise.restSeconds);
+    // Completing a set starts the workout clock (if idle) and, when the
+    // exercise defines a rest, a rest countdown that the clock tracks.
+    if (willComplete) {
+      workoutClock.start(date);
+      if (exercise.restSeconds > 0) {
+        resting.current = true;
+        workoutClock.startRest(date);
+        setRestLeft(exercise.restSeconds);
+      }
+    }
   };
 
   const bump = (i: number, delta: number) =>
@@ -84,7 +110,7 @@ export function LogSheet({
               <div style={{ fontWeight: 730, fontSize: 15 }}>Rest · <span className="num">{mmss(restLeft)}</span></div>
               <div className="tiny muted">Next set coming up</div>
             </div>
-            <button className="pillbadge" style={{ background: "color-mix(in srgb, var(--ember) 13%, transparent)", color: "var(--ember)", border: "none" }} onClick={() => setRestLeft(null)}>Skip</button>
+            <button className="pillbadge" style={{ background: "color-mix(in srgb, var(--ember) 13%, transparent)", color: "var(--ember)", border: "none" }} onClick={endRest}>Skip</button>
           </div>
         )}
 

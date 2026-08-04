@@ -88,6 +88,19 @@ func (m *Memory) DeleteExercise(_ context.Context, id string) error {
 	return nil
 }
 
+func (m *Memory) ReplaceExercises(_ context.Context, exs []domain.Exercise) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.exercises = make(map[string]domain.Exercise, len(exs))
+	for _, e := range exs {
+		if e.ID == "" {
+			e.ID = m.nextID()
+		}
+		m.exercises[e.ID] = e
+	}
+	return nil
+}
+
 func (m *Memory) GetDay(_ context.Context, date string) (domain.DayLog, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -148,4 +161,53 @@ func (m *Memory) CreateRoutineVersion(_ context.Context, v domain.RoutineVersion
 	}
 	m.versions = append(m.versions, v)
 	return v, nil
+}
+
+func (m *Memory) DeleteRoutineVersion(_ context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i, v := range m.versions {
+		if v.ID == id {
+			m.versions = append(m.versions[:i], m.versions[i+1:]...)
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
+func (m *Memory) SetRoutineVersionStatus(_ context.Context, id string, status domain.VersionStatus) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	idx := -1
+	for i := range m.versions {
+		if m.versions[i].ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return ErrNotFound
+	}
+	// Enforce a single current version: demote any other current to past.
+	if status == domain.StatusCurrent {
+		for i := range m.versions {
+			if i != idx && m.versions[i].Status == domain.StatusCurrent {
+				m.versions[i].Status = domain.StatusPast
+			}
+		}
+	}
+	m.versions[idx].Status = status
+	return nil
+}
+
+func (m *Memory) UpdateRoutineVersionNote(_ context.Context, id, note string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := range m.versions {
+		if m.versions[i].ID == id {
+			m.versions[i].Note = note
+			return nil
+		}
+	}
+	return ErrNotFound
 }

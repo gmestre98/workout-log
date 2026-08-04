@@ -20,6 +20,9 @@ type Store interface {
 	CreateExercise(ctx context.Context, e domain.Exercise) (domain.Exercise, error)
 	UpdateExercise(ctx context.Context, e domain.Exercise) error
 	DeleteExercise(ctx context.Context, id string) error
+	// ReplaceExercises swaps the entire live routine for exs (keeping each
+	// exercise's ID), so historical day logs keyed by exercise ID still line up.
+	ReplaceExercises(ctx context.Context, exs []domain.Exercise) error
 
 	// GetDay returns the log for a date. If none exists it returns an empty
 	// DayLog for that date and no error.
@@ -33,4 +36,11 @@ type Store interface {
 	ListRoutineVersions(ctx context.Context) ([]domain.RoutineVersion, error)
 	GetRoutineVersion(ctx context.Context, id string) (domain.RoutineVersion, error)
 	CreateRoutineVersion(ctx context.Context, v domain.RoutineVersion) (domain.RoutineVersion, error)
+	DeleteRoutineVersion(ctx context.Context, id string) error
+	// SetRoutineVersionStatus changes one version's status. When status is
+	// "current" every other version currently marked current is demoted to
+	// "past", preserving the single-current invariant.
+	SetRoutineVersionStatus(ctx context.Context, id string, status domain.VersionStatus) error
+	// UpdateRoutineVersionNote changes the free-text note on a version.
+	UpdateRoutineVersionNote(ctx context.Context, id, note string) error
 }

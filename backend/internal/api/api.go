@@ -40,6 +40,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/routine/versions", h.listVersions)
 	mux.HandleFunc("POST /api/routine/versions", h.createVersion)
 	mux.HandleFunc("GET /api/routine/versions/{id}", h.getVersion)
+	mux.HandleFunc("DELETE /api/routine/versions/{id}", h.deleteVersion)
+	mux.HandleFunc("PUT /api/routine/versions/{id}/status", h.setVersionStatus)
+	mux.HandleFunc("POST /api/routine/versions/{id}/activate", h.activateVersion)
 	return mux
 }
 
@@ -234,13 +237,22 @@ func (h *Handler) getVersion(w http.ResponseWriter, r *http.Request) {
 
 // createVersion snapshots the current routine. The note is optional; the
 // exercise list is always taken from the server's current state, never trusted
-// from the client.
+// from the client. Status defaults to "current" (which demotes any prior
+// current version to "past"); a client may instead save it as a "future" plan.
 func (h *Handler) createVersion(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Note string `json:"note"`
+		Note   string               `json:"note"`
+		Status domain.VersionStatus `json:"status"`
 	}
 	// Body is optional; ignore decode errors on empty body.
 	_ = json.NewDecoder(r.Body).Decode(&body)
+	if body.Status == "" {
+		body.Status = domain.StatusCurrent
+	}
+	if !body.Status.Valid() {
+		writeErr(w, http.StatusBadRequest, "status must be current, future or past")
+		return
+	}
 
 	exercises, err := h.store.ListExercises(r.Context())
 	if err != nil {
@@ -253,13 +265,91 @@ func (h *Handler) createVersion(w http.ResponseWriter, r *http.Request) {
 	v, err := h.store.CreateRoutineVersion(r.Context(), domain.RoutineVersion{
 		CreatedAt: time.Now().UTC(),
 		Note:      body.Note,
+		Status:    body.Status,
 		Exercises: exercises,
 	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Enforce the single-current invariant when saving directly as current.
+	if body.Status == domain.StatusCurrent {
+		if err := h.store.SetRoutineVersionStatus(r.Context(), v.ID, domain.StatusCurrent); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
 	writeJSON(w, http.StatusCreated, v)
+}
+
+func (h *Handler) deleteVersion(w http.ResponseWriter, r *http.Request) {
+	err := h.store.DeleteRoutineVersion(r.Context(), r.PathValue("id"))
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "version not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setVersionStatus relabels a version as "future" or "past". Marking a version
+// "current" is done through activateVersion, which also swaps in its exercises.
+func (h *Handler) setVersionStatus(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Status domain.VersionStatus `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if body.Status != domain.StatusFuture && body.Status != domain.StatusPast {
+		writeErr(w, http.StatusBadRequest, "status must be future or past (use activate to make current)")
+		return
+	}
+	err := h.store.SetRoutineVersionStatus(r.Context(), r.PathValue("id"), body.Status)
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "version not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	v, err := h.store.GetRoutineVersion(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
+}
+
+// activateVersion makes a version the current routine: its snapshot replaces
+// the live exercises and it is marked current (demoting the previous current to
+// past). This is how the user switches which workout version they are using.
+func (h *Handler) activateVersion(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	v, err := h.store.GetRoutineVersion(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "version not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.store.ReplaceExercises(r.Context(), v.Exercises); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.store.SetRoutineVersionStatus(r.Context(), id, domain.StatusCurrent); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	v.Status = domain.StatusCurrent
+	writeJSON(w, http.StatusOK, v)
 }
 
 func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {

@@ -7,6 +7,8 @@ import {
 } from "../format";
 import { Ring } from "./Ring";
 import { LogSheet } from "./LogSheet";
+import { WorkoutClock } from "./WorkoutClock";
+import { ConfirmDialog } from "./Modal";
 import { IconCheck, IconPlus } from "./icons";
 
 const today = todayISO();
@@ -19,6 +21,7 @@ export function Today() {
   const [day, setDay] = useState<DayLog | null>(null);
   const [activeDates, setActiveDates] = useState<Set<string>>(new Set());
   const [sheetFor, setSheetFor] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -109,7 +112,7 @@ export function Today() {
           <div className="subt">{hdr.dow} · {hdr.label}</div>
           <div className="title">Today</div>
         </div>
-        <button className="avatar" title="Account" onClick={() => { if (confirm("Sign out?")) api.logout().then(() => location.reload()); }}>G</button>
+        <button className="avatar" title="Account" onClick={() => setSigningOut(true)}>G</button>
       </div>
 
       <div className="datebar">
@@ -140,6 +143,8 @@ export function Today() {
           </div>
         </div>
       </div>
+
+      {date === today && exercises.length > 0 && <WorkoutClock date={today} />}
 
       {error && <p className="error">{error}</p>}
       {!day && !error && <p className="empty">Loading…</p>}
@@ -181,8 +186,20 @@ export function Today() {
         <LogSheet
           exercise={sheetEx}
           log={logFor(sheetEx)}
+          date={date}
           onChange={(m) => update(sheetEx, m)}
           onClose={() => setSheetFor(null)}
+        />
+      )}
+
+      {signingOut && (
+        <ConfirmDialog
+          title="Sign out?"
+          message="You'll need to sign in with Google again to track your workouts."
+          confirmLabel="Sign out"
+          danger
+          onConfirm={() => api.logout().then(() => location.reload())}
+          onCancel={() => setSigningOut(false)}
         />
       )}
     </div>

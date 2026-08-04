@@ -46,10 +46,13 @@ export interface Summary {
   perDay: DayStat[];
 }
 
+export type VersionStatus = "current" | "future" | "past";
+
 export interface RoutineVersion {
   id: string;
   createdAt: string; // RFC3339
   note: string;
+  status: VersionStatus;
   exercises: Exercise[];
 }
 
