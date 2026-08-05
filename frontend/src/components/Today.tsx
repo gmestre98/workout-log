@@ -98,6 +98,20 @@ export function Today() {
     [date, scheduleSave]
   );
 
+  // logSet marks the next incomplete set of ex as done with the given amount
+  // (reps, or seconds/minutes held). Used by the exercise-bound timer to store
+  // a set directly. No-op once every set is complete.
+  const logSet = useCallback(
+    (ex: Exercise, amount: number) =>
+      update(ex, (l) => {
+        const i = l.sets.findIndex((s) => !s.completed);
+        if (i < 0) return l;
+        const sets = l.sets.map((s, k) => (k === i ? { completed: true, actualAmount: amount } : s));
+        return { ...l, sets };
+      }),
+    [update]
+  );
+
   const orderedSlots = useMemo(() => {
     const seen: string[] = [];
     for (const e of exercises) if (!seen.includes(e.timeSlot)) seen.push(e.timeSlot);
@@ -166,7 +180,9 @@ export function Today() {
         </div>
       </div>
 
-      {date === today && exercises.length > 0 && <WorkoutClock date={today} />}
+      {date === today && exercises.length > 0 && (
+        <WorkoutClock date={today} exercises={exercises} logFor={logFor} onLogSet={logSet} />
+      )}
 
       {error && <p className="error">{error}</p>}
       {!day && !error && <p className="empty">Loading…</p>}
