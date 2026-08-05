@@ -17,6 +17,7 @@ vi.mock("./api", async () => {
       listVersions: vi.fn().mockResolvedValue([]),
       saveVersion: vi.fn().mockResolvedValue({}),
       deleteVersion: vi.fn().mockResolvedValue(undefined),
+      renameVersion: vi.fn().mockResolvedValue({}),
       setVersionStatus: vi.fn().mockResolvedValue({}),
       activateVersion: vi.fn().mockResolvedValue({}),
       loadVersion: vi.fn().mockResolvedValue([]),

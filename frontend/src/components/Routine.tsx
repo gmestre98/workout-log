@@ -51,6 +51,7 @@ export function Routine() {
   const [activateFor, setActivateFor] = useState<RoutineVersion | null>(null);
   const [deleteFor, setDeleteFor] = useState<RoutineVersion | null>(null);
   const [copyFor, setCopyFor] = useState<RoutineVersion | null>(null);
+  const [renameFor, setRenameFor] = useState<RoutineVersion | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
 
   const load = () => {
@@ -126,6 +127,17 @@ export function Routine() {
       await api.loadVersion(v.id);
       setCopyFor(null);
       toast(`Loaded a copy of "${versionName(v)}" — edit, then Save version`);
+      load();
+    } catch (e: any) { setError(String(e.message ?? e)); }
+    finally { setBusy(false); }
+  };
+
+  const doRename = async (v: RoutineVersion, note: string) => {
+    setBusy(true);
+    try {
+      await api.renameVersion(v.id, note);
+      setRenameFor(null);
+      toast(note ? "Version renamed" : "Version name cleared");
       load();
     } catch (e: any) { setError(String(e.message ?? e)); }
     finally { setBusy(false); }
@@ -235,6 +247,7 @@ export function Routine() {
             version={v}
             onActivate={() => setActivateFor(v)}
             onEditCopy={() => setCopyFor(v)}
+            onRename={() => setRenameFor(v)}
             onRelabel={(s) => relabel(v, s)}
             onDelete={() => setDeleteFor(v)}
           />
@@ -295,7 +308,42 @@ export function Routine() {
           onCancel={() => setAssignOpen(false)}
         />
       )}
+      {renameFor && (
+        <RenameVersionDialog
+          version={renameFor}
+          busy={busy}
+          onSave={(note) => doRename(renameFor, note)}
+          onCancel={() => setRenameFor(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function RenameVersionDialog({
+  version, busy, onSave, onCancel,
+}: {
+  version: RoutineVersion;
+  busy: boolean;
+  onSave: (note: string) => void;
+  onCancel: () => void;
+}) {
+  const [note, setNote] = useState(version.note ?? "");
+  return (
+    <Modal title="Rename version" onClose={busy ? undefined : onCancel}>
+      <p className="modal-msg">Give this workout version a name. Leave it empty to show its save date instead.</p>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); onSave(note.trim()); }}>
+        <label>Name
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Winter block, deload week" autoFocus />
+        </label>
+      </form>
+      <div className="modal-btns">
+        <button className="btn ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button className="btn primary" onClick={() => onSave(note.trim())} disabled={busy}>
+          {busy ? "Saving…" : "Save name"}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
@@ -376,11 +424,12 @@ function AssignVersionDialog({
 }
 
 function VersionCard({
-  version, onActivate, onEditCopy, onRelabel, onDelete,
+  version, onActivate, onEditCopy, onRename, onRelabel, onDelete,
 }: {
   version: RoutineVersion;
   onActivate: () => void;
   onEditCopy: () => void;
+  onRename: () => void;
   onRelabel: (status: "future" | "past") => void;
   onDelete: () => void;
 }) {
@@ -389,12 +438,12 @@ function VersionCard({
   return (
     <div className={`card version ${isCurrent ? "is-current" : ""}`}>
       <div className="version-top">
-        <div>
+        <button className="version-title" onClick={onRename} aria-label="Rename version">
           <div className="version-name">{versionName(version)}</div>
           <div className="tiny muted">
             {version.exercises.length} exercises{version.note?.trim() ? ` · saved ${fmtDate(version.createdAt)}` : ""}
           </div>
-        </div>
+        </button>
         <span className={`pillbadge ${meta.cls}`}>{meta.label}</span>
       </div>
       <div className="version-actions">
@@ -405,6 +454,7 @@ function VersionCard({
             <button className="link" onClick={onActivate}>Set as current</button>
           )}
           <button className="link" onClick={onEditCopy}>Edit a copy</button>
+          <button className="link" onClick={onRename}>Rename</button>
         </div>
         <div className="version-actions-r">
           {version.status !== "future" && !isCurrent && (

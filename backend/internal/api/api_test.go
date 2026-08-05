@@ -210,6 +210,24 @@ func TestRoutineVersionsFlow(t *testing.T) {
 		t.Fatalf("expected new version current, got %q", created.Status)
 	}
 
+	// rename the version
+	resp = do(t, http.MethodPut, srv.URL+"/api/routine/versions/"+created.ID+"/note", map[string]string{"note": "Winter block"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("rename: got %d", resp.StatusCode)
+	}
+	var renamed domain.RoutineVersion
+	json.NewDecoder(resp.Body).Decode(&renamed)
+	resp.Body.Close()
+	if renamed.Note != "Winter block" {
+		t.Fatalf("rename not applied: %q", renamed.Note)
+	}
+	// renaming a missing version 404s
+	resp = do(t, http.MethodPut, srv.URL+"/api/routine/versions/nope/note", map[string]string{"note": "x"})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("rename missing: got %d want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+
 	// missing
 	resp = do(t, http.MethodGet, srv.URL+"/api/routine/versions/nope", nil)
 	if resp.StatusCode != http.StatusNotFound {

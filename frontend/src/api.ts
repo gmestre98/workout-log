@@ -52,6 +52,8 @@ export const api = {
   saveVersion: (note: string, status: VersionStatus = "current") =>
     request<RoutineVersion>("POST", "/api/routine/versions", { note, status }),
   deleteVersion: (id: string) => request<void>("DELETE", `/api/routine/versions/${id}`),
+  renameVersion: (id: string, note: string) =>
+    request<RoutineVersion>("PUT", `/api/routine/versions/${id}/note`, { note }),
   setVersionStatus: (id: string, status: "future" | "past") =>
     request<RoutineVersion>("PUT", `/api/routine/versions/${id}/status`, { status }),
   activateVersion: (id: string) =>

@@ -41,6 +41,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/routine/versions", h.createVersion)
 	mux.HandleFunc("GET /api/routine/versions/{id}", h.getVersion)
 	mux.HandleFunc("DELETE /api/routine/versions/{id}", h.deleteVersion)
+	mux.HandleFunc("PUT /api/routine/versions/{id}/note", h.renameVersion)
 	mux.HandleFunc("PUT /api/routine/versions/{id}/status", h.setVersionStatus)
 	mux.HandleFunc("POST /api/routine/versions/{id}/activate", h.activateVersion)
 	mux.HandleFunc("POST /api/routine/versions/{id}/load", h.loadVersion)
@@ -297,6 +298,34 @@ func (h *Handler) deleteVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// renameVersion updates a version's free-text name (its note). An empty note is
+// allowed and simply leaves the version unnamed (it then shows its save date).
+func (h *Handler) renameVersion(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Note string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	id := r.PathValue("id")
+	err := h.store.UpdateRoutineVersionNote(r.Context(), id, body.Note)
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "version not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	v, err := h.store.GetRoutineVersion(r.Context(), id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, v)
 }
 
 // setVersionStatus relabels a version as "future" or "past". Marking a version
