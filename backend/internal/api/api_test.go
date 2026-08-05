@@ -283,6 +283,116 @@ func TestVersionStatusActivateDelete(t *testing.T) {
 	resp.Body.Close()
 }
 
+func TestVersionSchedule(t *testing.T) {
+	srv, m := newServer()
+	defer srv.Close()
+	ctx := context.Background()
+	m.CreateExercise(ctx, domain.Exercise{ID: "ex-1", Name: "Pull-ups", TimeSlot: "Wake up", Unit: domain.UnitReps, PlannedSets: 4, PlannedAmount: 8, Active: true})
+	v := createVersion(t, srv.URL, "July block", domain.StatusCurrent)
+
+	// Empty schedule to start.
+	if got := getSchedule(t, srv.URL); len(got) != 0 {
+		t.Fatalf("expected empty schedule, got %d", len(got))
+	}
+
+	// Assigning to a bad date is rejected.
+	resp := do(t, http.MethodPut, srv.URL+"/api/routine/schedule/2026-7-1", map[string]string{"versionId": v.ID})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bad date: got %d want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Assigning an unknown version is rejected.
+	resp = do(t, http.MethodPut, srv.URL+"/api/routine/schedule/2026-07-01", map[string]string{"versionId": "nope"})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown version: got %d want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Valid assignment.
+	resp = do(t, http.MethodPut, srv.URL+"/api/routine/schedule/2026-07-01", map[string]string{"versionId": v.ID})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("assign: got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Re-assigning the same date replaces (still one entry).
+	v2 := createVersion(t, srv.URL, "July revision", domain.StatusFuture)
+	resp = do(t, http.MethodPut, srv.URL+"/api/routine/schedule/2026-07-01", map[string]string{"versionId": v2.ID})
+	resp.Body.Close()
+	sched := getSchedule(t, srv.URL)
+	if len(sched) != 1 || sched[0].VersionID != v2.ID || sched[0].StartDate != "2026-07-01" {
+		t.Fatalf("expected single replaced assignment, got %+v", sched)
+	}
+
+	// A second boundary, listed oldest-first.
+	do(t, http.MethodPut, srv.URL+"/api/routine/schedule/2026-08-01", map[string]string{"versionId": v.ID}).Body.Close()
+	sched = getSchedule(t, srv.URL)
+	if len(sched) != 2 || sched[0].StartDate != "2026-07-01" || sched[1].StartDate != "2026-08-01" {
+		t.Fatalf("expected two ordered assignments, got %+v", sched)
+	}
+
+	// Delete one.
+	resp = do(t, http.MethodDelete, srv.URL+"/api/routine/schedule/2026-07-01", nil)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete assignment: got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if len(getSchedule(t, srv.URL)) != 1 {
+		t.Fatalf("expected 1 assignment after delete")
+	}
+	// Deleting a missing boundary 404s.
+	resp = do(t, http.MethodDelete, srv.URL+"/api/routine/schedule/2020-01-01", nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("delete missing: got %d want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestLoadVersionIntoRoutine(t *testing.T) {
+	srv, m := newServer()
+	defer srv.Close()
+	ctx := context.Background()
+	m.CreateExercise(ctx, domain.Exercise{ID: "ex-1", Name: "Pull-ups", TimeSlot: "Wake up", Unit: domain.UnitReps, PlannedSets: 4, PlannedAmount: 8, Active: true})
+	v := createVersion(t, srv.URL, "base", domain.StatusCurrent)
+
+	// Change the live routine so we can prove load overwrites it.
+	m.ReplaceExercises(ctx, []domain.Exercise{{ID: "ex-9", Name: "Squats", TimeSlot: "Evening", Unit: domain.UnitReps, PlannedSets: 3, PlannedAmount: 12, Active: true}})
+
+	resp := do(t, http.MethodPost, srv.URL+"/api/routine/versions/"+v.ID+"/load", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("load: got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Live routine is now the version's exercises, IDs preserved.
+	exs, _ := m.ListExercises(ctx)
+	if len(exs) != 1 || exs[0].ID != "ex-1" || exs[0].Name != "Pull-ups" {
+		t.Fatalf("load did not restore version exercises: %+v", exs)
+	}
+	// Statuses are untouched: the version is still current, none demoted.
+	vv, _ := m.GetRoutineVersion(ctx, v.ID)
+	if vv.Status != domain.StatusCurrent {
+		t.Fatalf("load should not change status, got %q", vv.Status)
+	}
+
+	// Unknown version 404s.
+	resp = do(t, http.MethodPost, srv.URL+"/api/routine/versions/nope/load", nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("load missing: got %d want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func getSchedule(t *testing.T, base string) []domain.VersionAssignment {
+	t.Helper()
+	resp := do(t, http.MethodGet, base+"/api/routine/schedule", nil)
+	var out []domain.VersionAssignment
+	json.NewDecoder(resp.Body).Decode(&out)
+	resp.Body.Close()
+	return out
+}
+
 func createVersion(t *testing.T, base, note string, s domain.VersionStatus) domain.RoutineVersion {
 	t.Helper()
 	resp := do(t, http.MethodPost, base+"/api/routine/versions", map[string]string{"note": note, "status": string(s)})

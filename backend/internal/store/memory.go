@@ -12,18 +12,20 @@ import (
 // Memory is an in-memory Store. It is safe for concurrent use and is used by
 // unit tests and by local development (WORKOUT_STORE=memory).
 type Memory struct {
-	mu        sync.RWMutex
-	exercises map[string]domain.Exercise
-	days      map[string]domain.DayLog
-	versions  []domain.RoutineVersion
-	seq       int
+	mu          sync.RWMutex
+	exercises   map[string]domain.Exercise
+	days        map[string]domain.DayLog
+	versions    []domain.RoutineVersion
+	assignments map[string]domain.VersionAssignment // keyed by StartDate
+	seq         int
 }
 
 // NewMemory returns an empty in-memory store.
 func NewMemory() *Memory {
 	return &Memory{
-		exercises: map[string]domain.Exercise{},
-		days:      map[string]domain.DayLog{},
+		exercises:   map[string]domain.Exercise{},
+		days:        map[string]domain.DayLog{},
+		assignments: map[string]domain.VersionAssignment{},
 	}
 }
 
@@ -210,4 +212,32 @@ func (m *Memory) UpdateRoutineVersionNote(_ context.Context, id, note string) er
 		}
 	}
 	return ErrNotFound
+}
+
+func (m *Memory) ListVersionAssignments(_ context.Context) ([]domain.VersionAssignment, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]domain.VersionAssignment, 0, len(m.assignments))
+	for _, a := range m.assignments {
+		out = append(out, a)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].StartDate < out[j].StartDate })
+	return out, nil
+}
+
+func (m *Memory) SetVersionAssignment(_ context.Context, a domain.VersionAssignment) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.assignments[a.StartDate] = a
+	return nil
+}
+
+func (m *Memory) DeleteVersionAssignment(_ context.Context, startDate string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.assignments[startDate]; !ok {
+		return ErrNotFound
+	}
+	delete(m.assignments, startDate)
+	return nil
 }

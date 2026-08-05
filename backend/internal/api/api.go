@@ -43,6 +43,10 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/routine/versions/{id}", h.deleteVersion)
 	mux.HandleFunc("PUT /api/routine/versions/{id}/status", h.setVersionStatus)
 	mux.HandleFunc("POST /api/routine/versions/{id}/activate", h.activateVersion)
+	mux.HandleFunc("POST /api/routine/versions/{id}/load", h.loadVersion)
+	mux.HandleFunc("GET /api/routine/schedule", h.listSchedule)
+	mux.HandleFunc("PUT /api/routine/schedule/{date}", h.setAssignment)
+	mux.HandleFunc("DELETE /api/routine/schedule/{date}", h.deleteAssignment)
 	return mux
 }
 
@@ -350,6 +354,100 @@ func (h *Handler) activateVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	v.Status = domain.StatusCurrent
 	writeJSON(w, http.StatusOK, v)
+}
+
+// loadVersion copies a version's exercises into the live editable routine
+// WITHOUT changing any version status. It is the basis for "create a routine
+// from an existing one": load a copy, tweak a few exercises in the routine
+// editor, then save it as a new version — no need to re-enter every exercise.
+// Exercise IDs are preserved so day logs for unchanged exercises stay aligned.
+func (h *Handler) loadVersion(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	v, err := h.store.GetRoutineVersion(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "version not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.store.ReplaceExercises(r.Context(), v.Exercises); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	exercises := v.Exercises
+	if exercises == nil {
+		exercises = []domain.Exercise{}
+	}
+	writeJSON(w, http.StatusOK, exercises)
+}
+
+// listSchedule returns the version schedule: which routine version was in
+// effect from which date, oldest first. It is a record/label only.
+func (h *Handler) listSchedule(w http.ResponseWriter, r *http.Request) {
+	assignments, err := h.store.ListVersionAssignments(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if assignments == nil {
+		assignments = []domain.VersionAssignment{}
+	}
+	writeJSON(w, http.StatusOK, assignments)
+}
+
+// setAssignment records that a version is in effect starting on {date}. The
+// date is the boundary key, so re-assigning the same date replaces it.
+func (h *Handler) setAssignment(w http.ResponseWriter, r *http.Request) {
+	date := r.PathValue("date")
+	if !dateRe.MatchString(date) {
+		writeErr(w, http.StatusBadRequest, "date must be YYYY-MM-DD")
+		return
+	}
+	var body struct {
+		VersionID string `json:"versionId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if body.VersionID == "" {
+		writeErr(w, http.StatusBadRequest, "versionId is required")
+		return
+	}
+	// Reject assignments that point at a version that does not exist.
+	if _, err := h.store.GetRoutineVersion(r.Context(), body.VersionID); errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "version not found")
+		return
+	} else if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	a := domain.VersionAssignment{StartDate: date, VersionID: body.VersionID}
+	if err := h.store.SetVersionAssignment(r.Context(), a); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, a)
+}
+
+func (h *Handler) deleteAssignment(w http.ResponseWriter, r *http.Request) {
+	date := r.PathValue("date")
+	if !dateRe.MatchString(date) {
+		writeErr(w, http.StatusBadRequest, "date must be YYYY-MM-DD")
+		return
+	}
+	err := h.store.DeleteVersionAssignment(r.Context(), date)
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "assignment not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {

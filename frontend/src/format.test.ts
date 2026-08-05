@@ -16,6 +16,9 @@ import {
   muscleBreakdown,
   dayHeader,
   formatDuration,
+  effectiveVersionId,
+  firstOfMonth,
+  monthLabel,
 } from "./format";
 import type { DayLog, Exercise } from "./types";
 
@@ -81,6 +84,32 @@ describe("formatDuration", () => {
     expect(formatDuration(3_600_000)).toBe("1:00:00");
     expect(formatDuration(3_661_000)).toBe("1:01:01");
     expect(formatDuration(-5000)).toBe("0:00");
+  });
+});
+
+describe("effectiveVersionId", () => {
+  const sched = [
+    { startDate: "2026-07-01", versionId: "vA" },
+    { startDate: "2026-08-01", versionId: "vB" },
+  ];
+  it("returns the assignment in effect on the date", () => {
+    expect(effectiveVersionId(sched, "2026-07-15")).toBe("vA");
+    expect(effectiveVersionId(sched, "2026-08-01")).toBe("vB"); // boundary is inclusive
+    expect(effectiveVersionId(sched, "2026-09-30")).toBe("vB"); // last one is open-ended
+  });
+  it("returns undefined before the first assignment or when empty", () => {
+    expect(effectiveVersionId(sched, "2026-06-30")).toBeUndefined();
+    expect(effectiveVersionId([], "2026-07-15")).toBeUndefined();
+  });
+  it("does not depend on input order", () => {
+    expect(effectiveVersionId([...sched].reverse(), "2026-07-15")).toBe("vA");
+  });
+});
+
+describe("month helpers", () => {
+  it("firstOfMonth and monthLabel", () => {
+    expect(firstOfMonth("2026-07-26")).toBe("2026-07-01");
+    expect(monthLabel("2026-07-26")).toBe("Jul 2026");
   });
 });
 

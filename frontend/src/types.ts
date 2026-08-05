@@ -56,6 +56,14 @@ export interface RoutineVersion {
   exercises: Exercise[];
 }
 
+// VersionAssignment records that a version was in effect starting on startDate.
+// Assignments form an effective-dated timeline (see backend domain). It is a
+// record/label only and does not change which routine daily tracking uses.
+export interface VersionAssignment {
+  startDate: string; // YYYY-MM-DD
+  versionId: string;
+}
+
 export const UNITS: Unit[] = ["reps", "seconds", "minutes"];
 
 // Suggested daily blocks offered as quick-pick chips. The field is free text,

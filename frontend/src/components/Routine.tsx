@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { Exercise, RoutineVersion, Unit, VersionStatus } from "../types";
+import type { Exercise, RoutineVersion, VersionAssignment, Unit, VersionStatus } from "../types";
 import { DEFAULT_TIME_SLOTS, UNITS } from "../types";
-import { primaryMuscle, slotColor } from "../format";
+import { firstOfMonth, primaryMuscle, slotColor, todayISO } from "../format";
 import { toast } from "../toast";
 import { ConfirmDialog, Modal } from "./Modal";
 import { IconPlus } from "./icons";
@@ -20,6 +20,17 @@ const fmtDate = (iso: string) => {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 };
 
+// A version's display name: its note, or its save date if unnamed.
+const versionName = (v: RoutineVersion) => v.note?.trim() || fmtDate(v.createdAt);
+
+// fmtBoundary shows a schedule start date, collapsing a month's 1st to just the
+// month (the common monthly case) and showing the full date otherwise.
+const fmtBoundary = (iso: string) => {
+  const d = new Date(iso);
+  if (iso.endsWith("-01")) return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  return fmtDate(iso);
+};
+
 const STATUS_META: Record<VersionStatus, { label: string; cls: string }> = {
   current: { label: "In use", cls: "current" },
   future: { label: "Planned", cls: "future" },
@@ -29,6 +40,7 @@ const STATUS_META: Record<VersionStatus, { label: string; cls: string }> = {
 export function Routine() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [versions, setVersions] = useState<RoutineVersion[]>([]);
+  const [schedule, setSchedule] = useState<VersionAssignment[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -38,11 +50,13 @@ export function Routine() {
   const [busy, setBusy] = useState(false);
   const [activateFor, setActivateFor] = useState<RoutineVersion | null>(null);
   const [deleteFor, setDeleteFor] = useState<RoutineVersion | null>(null);
+  const [copyFor, setCopyFor] = useState<RoutineVersion | null>(null);
+  const [assignOpen, setAssignOpen] = useState(false);
 
   const load = () => {
     setLoading(true);
-    Promise.all([api.listExercises(), api.listVersions()])
-      .then(([exs, vs]) => { setExercises(exs); setVersions(vs); })
+    Promise.all([api.listExercises(), api.listVersions(), api.listSchedule()])
+      .then(([exs, vs, sch]) => { setExercises(exs); setVersions(vs); setSchedule(sch); })
       .catch((e) => setError(String(e.message ?? e)))
       .finally(() => setLoading(false));
   };
@@ -100,6 +114,38 @@ export function Routine() {
     try {
       await api.setVersionStatus(v.id, status);
       toast(status === "future" ? "Moved to future plans" : "Archived to past");
+      load();
+    } catch (e: any) { setError(String(e.message ?? e)); }
+  };
+
+  // Load a copy of a version into the live routine so the user can tweak a few
+  // exercises and save it as a new version — no re-entering everything.
+  const doEditCopy = async (v: RoutineVersion) => {
+    setBusy(true);
+    try {
+      await api.loadVersion(v.id);
+      setCopyFor(null);
+      toast(`Loaded a copy of "${versionName(v)}" — edit, then Save version`);
+      load();
+    } catch (e: any) { setError(String(e.message ?? e)); }
+    finally { setBusy(false); }
+  };
+
+  const doAssign = async (startDate: string, versionId: string) => {
+    setBusy(true);
+    try {
+      await api.setAssignment(startDate, versionId);
+      setAssignOpen(false);
+      toast("Version scheduled");
+      load();
+    } catch (e: any) { setError(String(e.message ?? e)); }
+    finally { setBusy(false); }
+  };
+
+  const doUnassign = async (startDate: string) => {
+    try {
+      await api.deleteAssignment(startDate);
+      toast("Removed from schedule");
       load();
     } catch (e: any) { setError(String(e.message ?? e)); }
   };
@@ -188,11 +234,22 @@ export function Routine() {
             key={v.id}
             version={v}
             onActivate={() => setActivateFor(v)}
+            onEditCopy={() => setCopyFor(v)}
             onRelabel={(s) => relabel(v, s)}
             onDelete={() => setDeleteFor(v)}
           />
         ))
       )}
+
+      <div className="slot-head" style={{ marginTop: 22 }}>
+        <span className="slot-title">Schedule</span>
+        {versions.length > 0 && <button className="link" onClick={() => setAssignOpen(true)}>Assign</button>}
+      </div>
+      <ScheduleList
+        schedule={schedule}
+        versions={versions}
+        onUnassign={doUnassign}
+      />
 
       <div className="scroll-pad" />
 
@@ -220,15 +277,110 @@ export function Routine() {
           onCancel={() => setDeleteFor(null)}
         />
       )}
+      {copyFor && (
+        <ConfirmDialog
+          title="Edit a copy?"
+          message={`Loads a copy of "${versionName(copyFor)}" (${copyFor.exercises.length} exercises) into your routine so you can change a few and Save as a new version. This replaces what's currently in the routine editor.`}
+          confirmLabel="Load copy"
+          busy={busy}
+          onConfirm={() => doEditCopy(copyFor)}
+          onCancel={() => setCopyFor(null)}
+        />
+      )}
+      {assignOpen && (
+        <AssignVersionDialog
+          versions={versions}
+          busy={busy}
+          onAssign={doAssign}
+          onCancel={() => setAssignOpen(false)}
+        />
+      )}
     </div>
   );
 }
 
+function ScheduleList({
+  schedule, versions, onUnassign,
+}: {
+  schedule: VersionAssignment[];
+  versions: RoutineVersion[];
+  onUnassign: (startDate: string) => void;
+}) {
+  const byId = useMemo(() => new Map(versions.map((v) => [v.id, v])), [versions]);
+  if (schedule.length === 0) {
+    return (
+      <div className="card" style={{ padding: 15 }}>
+        <p className="tiny muted" style={{ textAlign: "center", padding: "8px 0" }}>
+          No schedule yet. Assign a version a start date (usually the 1st of a month) to record which routine you followed when. This is a label only — it doesn't change your daily tracking.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <>
+      {schedule.map((a, i) => {
+        const v = byId.get(a.versionId);
+        const next = schedule[i + 1];
+        return (
+          <div key={a.startDate} className="card sched">
+            <div className="sched-body">
+              <div className="sched-range num">
+                {fmtBoundary(a.startDate)}{next ? ` → ${fmtBoundary(next.startDate)}` : " onward"}
+              </div>
+              <div className="tiny muted">
+                {v ? versionName(v) : "Deleted version — remove this entry"}
+                {v ? ` · ${v.exercises.length} exercises` : ""}
+              </div>
+            </div>
+            <button className="link danger" onClick={() => onUnassign(a.startDate)}>Remove</button>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function AssignVersionDialog({
+  versions, busy, onAssign, onCancel,
+}: {
+  versions: RoutineVersion[];
+  busy: boolean;
+  onAssign: (startDate: string, versionId: string) => void;
+  onCancel: () => void;
+}) {
+  const [startDate, setStartDate] = useState(firstOfMonth(todayISO()));
+  const [versionId, setVersionId] = useState(versions[0]?.id ?? "");
+  return (
+    <Modal title="Schedule a version" onClose={busy ? undefined : onCancel}>
+      <p className="modal-msg">Record which version was in effect from a given date. It stays in effect until the next scheduled date. Pick the 1st of a month for a monthly plan, or any day for a mid-month change.</p>
+      <div className="form" style={{ gap: 14 }}>
+        <label>In effect from
+          <input type="date" value={startDate} onChange={(e) => e.target.value && setStartDate(e.target.value)} />
+        </label>
+        <label>Version
+          <select value={versionId} onChange={(e) => setVersionId(e.target.value)}>
+            {versions.map((v) => (
+              <option key={v.id} value={v.id}>{versionName(v)} ({v.status})</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="modal-btns">
+        <button className="btn ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button className="btn primary" onClick={() => versionId && onAssign(startDate, versionId)} disabled={busy || !versionId}>
+          {busy ? "Saving…" : "Schedule"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 function VersionCard({
-  version, onActivate, onRelabel, onDelete,
+  version, onActivate, onEditCopy, onRelabel, onDelete,
 }: {
   version: RoutineVersion;
   onActivate: () => void;
+  onEditCopy: () => void;
   onRelabel: (status: "future" | "past") => void;
   onDelete: () => void;
 }) {
@@ -244,14 +396,17 @@ function VersionCard({
         <span className={`pillbadge ${meta.cls}`}>{meta.label}</span>
       </div>
       <div className="version-actions">
-        {isCurrent ? (
-          <span className="tiny muted">Currently in use</span>
-        ) : (
-          <button className="link" onClick={onActivate}>Set as current</button>
-        )}
+        <div className="version-actions-l">
+          {isCurrent ? (
+            <span className="tiny muted">Currently in use</span>
+          ) : (
+            <button className="link" onClick={onActivate}>Set as current</button>
+          )}
+          <button className="link" onClick={onEditCopy}>Edit a copy</button>
+        </div>
         <div className="version-actions-r">
           {version.status !== "future" && !isCurrent && (
-            <button className="link" onClick={() => onRelabel("future")}>Move to future</button>
+            <button className="link" onClick={() => onRelabel("future")}>Future</button>
           )}
           {version.status !== "past" && !isCurrent && (
             <button className="link" onClick={() => onRelabel("past")}>Archive</button>

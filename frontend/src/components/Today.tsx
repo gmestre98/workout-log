@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
-import type { DayLog, Exercise, ExerciseLog } from "../types";
+import type { DayLog, Exercise, ExerciseLog, RoutineVersion, VersionAssignment } from "../types";
 import {
-  addDaysISO, computeStreak, dayCompletion, dayHeader, exerciseCompletion,
+  addDaysISO, computeStreak, dayCompletion, dayHeader, effectiveVersionId, exerciseCompletion,
   formatPercent, newLog, slotColor, todayISO,
 } from "../format";
 import { Ring } from "./Ring";
@@ -20,6 +20,8 @@ export function Today() {
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [day, setDay] = useState<DayLog | null>(null);
   const [activeDates, setActiveDates] = useState<Set<string>>(new Set());
+  const [schedule, setSchedule] = useState<VersionAssignment[]>([]);
+  const [versions, setVersions] = useState<RoutineVersion[]>([]);
   const [sheetFor, setSheetFor] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
@@ -34,6 +36,13 @@ export function Today() {
         for (const d of days) if (dayHasActivity(d)) set.add(d.date);
         setActiveDates(set);
       })
+      .catch(() => {});
+  }, []);
+
+  // Schedule + versions, to label which version applied to the viewed date.
+  useEffect(() => {
+    Promise.all([api.listSchedule(), api.listVersions()])
+      .then(([sch, vs]) => { setSchedule(sch); setVersions(vs); })
       .catch(() => {});
   }, []);
 
@@ -104,6 +113,13 @@ export function Today() {
   const doneCount = exercises.filter((e) => exerciseCompletion(logFor(e)) >= 1).length;
   const hdr = dayHeader(date);
   const sheetEx = exercises.find((e) => e.id === sheetFor) ?? null;
+  const scheduledVersion = useMemo(() => {
+    const id = effectiveVersionId(schedule, date);
+    return id ? versions.find((v) => v.id === id) : undefined;
+  }, [schedule, versions, date]);
+  const scheduledLabel = scheduledVersion
+    ? (scheduledVersion.note?.trim() || dayHeader(scheduledVersion.createdAt.slice(0, 10)).label)
+    : "";
 
   return (
     <div className="screen-body">
@@ -130,6 +146,12 @@ export function Today() {
         </label>
         <button className="nav" onClick={() => setDate(addDaysISO(date, 1))} aria-label="Next day" disabled={date >= today} style={date >= today ? { opacity: 0.4 } : undefined}>›</button>
       </div>
+
+      {scheduledVersion && (
+        <div className="sched-tag" title="Scheduled workout version for this date (label only)">
+          <span className="dot" /> Version: <b>{scheduledLabel}</b>
+        </div>
+      )}
 
       <div className="card" style={{ padding: 16 }}>
         <div className="ring-wrap">

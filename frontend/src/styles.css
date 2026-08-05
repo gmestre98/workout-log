@@ -359,4 +359,13 @@ input, select { font-family: inherit; }
 .version-date { font-size: 14.5px; font-weight: 720; }
 .version-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .version-actions .link { padding: 2px 0; }
+.version-actions-l { display: flex; align-items: center; gap: 14px; }
 .version-actions-r { display: flex; align-items: center; gap: 14px; margin-left: auto; }
+
+/* Schedule rows */
+.sched { padding: 13px 15px; margin-bottom: 9px; display: flex; align-items: center; gap: 11px; }
+.sched-body { flex: 1; min-width: 0; }
+.sched-range { font-size: 14px; font-weight: 720; }
+.sched-tag { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); margin: -2px 4px 12px; }
+.sched-tag b { color: var(--ink); font-weight: 720; }
+.sched-tag .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--night); box-shadow: 0 0 0 3px color-mix(in srgb, var(--night) 20%, transparent); }

@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	exercisesCollection = "exercises"
-	daysCollection      = "days"
-	versionsCollection  = "routine_versions"
+	exercisesCollection   = "exercises"
+	daysCollection        = "days"
+	versionsCollection    = "routine_versions"
+	assignmentsCollection = "version_assignments"
 )
 
 // Firestore is a Store backed by Google Cloud Firestore (native mode).
@@ -314,5 +315,43 @@ func (f *Firestore) UpdateRoutineVersionNote(ctx context.Context, id, note strin
 		return err
 	}
 	_, err := ref.Update(ctx, []firestore.Update{{Path: "note", Value: note}})
+	return err
+}
+
+func (f *Firestore) ListVersionAssignments(ctx context.Context) ([]domain.VersionAssignment, error) {
+	iter := f.client.Collection(assignmentsCollection).OrderBy("startDate", firestore.Asc).Documents(ctx)
+	defer iter.Stop()
+	var out []domain.VersionAssignment
+	for {
+		doc, err := iter.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		var a domain.VersionAssignment
+		if err := doc.DataTo(&a); err != nil {
+			return nil, err
+		}
+		a.StartDate = doc.Ref.ID
+		out = append(out, a)
+	}
+	return out, nil
+}
+
+func (f *Firestore) SetVersionAssignment(ctx context.Context, a domain.VersionAssignment) error {
+	_, err := f.client.Collection(assignmentsCollection).Doc(a.StartDate).Set(ctx, a)
+	return err
+}
+
+func (f *Firestore) DeleteVersionAssignment(ctx context.Context, startDate string) error {
+	ref := f.client.Collection(assignmentsCollection).Doc(startDate)
+	if _, err := ref.Get(ctx); status.Code(err) == codes.NotFound {
+		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	_, err := ref.Delete(ctx)
 	return err
 }

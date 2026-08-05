@@ -179,6 +179,32 @@ export function muscleBreakdown(exercises: Exercise[], days: DayLog[]): MuscleSt
     .sort((a, b) => b.completion - a.completion);
 }
 
+// effectiveVersionId returns the version in effect on date per an effective-
+// dated schedule: the assignment with the greatest startDate <= date. Returns
+// undefined when no assignment covers the date. Assignments need not be sorted.
+export function effectiveVersionId(
+  assignments: { startDate: string; versionId: string }[],
+  date: string
+): string | undefined {
+  let best: { startDate: string; versionId: string } | undefined;
+  for (const a of assignments) {
+    if (a.startDate <= date && (!best || a.startDate > best.startDate)) best = a;
+  }
+  return best?.versionId;
+}
+
+// monthLabel formats a YYYY-MM-DD as "Jul 2026".
+export function monthLabel(iso: string): string {
+  const [y, m] = iso.split("-").map(Number);
+  return `${MON[m - 1]} ${y}`;
+}
+
+// firstOfMonth returns the YYYY-MM-01 of the month containing iso.
+export function firstOfMonth(iso: string): string {
+  const [y, m] = iso.split("-");
+  return `${y}-${m}-01`;
+}
+
 // dayHeader formats a YYYY-MM-DD as { dow: "MON", label: "21 Jul" }.
 const DOW = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

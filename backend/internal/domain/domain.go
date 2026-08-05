@@ -90,6 +90,20 @@ func (s VersionStatus) Valid() bool {
 	}
 }
 
+// VersionAssignment records that a saved routine version was in effect starting
+// on StartDate. Assignments form an effective-dated timeline: the version in
+// effect on any date D is the assignment with the greatest StartDate <= D. This
+// covers monthly assignments (start on the 1st) and, later, per-day changes
+// (start on any day) without gaps or overlaps. StartDate ("YYYY-MM-DD") is the
+// document ID, so each boundary date maps to exactly one version.
+//
+// The schedule is a record/label only: it documents which version applied when
+// and does not change which exercises the daily tracking or stats use.
+type VersionAssignment struct {
+	StartDate string `json:"startDate" firestore:"startDate"`
+	VersionID string `json:"versionId" firestore:"versionId"`
+}
+
 // RoutineVersion is a saved snapshot of the whole routine at a point in time,
 // so past configurations are never lost and can be reviewed or compared. Status
 // marks which one is current (in use), planned (future) or archived (past); at

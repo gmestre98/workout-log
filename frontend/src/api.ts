@@ -1,4 +1,4 @@
-import type { DayLog, Exercise, RoutineVersion, Summary, VersionStatus } from "./types";
+import type { DayLog, Exercise, RoutineVersion, Summary, VersionAssignment, VersionStatus } from "./types";
 
 // Thrown when the user is not signed in (HTTP 401). The app uses this to show
 // the sign-in screen.
@@ -56,4 +56,12 @@ export const api = {
     request<RoutineVersion>("PUT", `/api/routine/versions/${id}/status`, { status }),
   activateVersion: (id: string) =>
     request<RoutineVersion>("POST", `/api/routine/versions/${id}/activate`),
+  loadVersion: (id: string) =>
+    request<Exercise[]>("POST", `/api/routine/versions/${id}/load`),
+
+  listSchedule: () => request<VersionAssignment[]>("GET", "/api/routine/schedule"),
+  setAssignment: (startDate: string, versionId: string) =>
+    request<VersionAssignment>("PUT", `/api/routine/schedule/${startDate}`, { versionId }),
+  deleteAssignment: (startDate: string) =>
+    request<void>("DELETE", `/api/routine/schedule/${startDate}`),
 };

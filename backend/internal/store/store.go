@@ -43,4 +43,13 @@ type Store interface {
 	SetRoutineVersionStatus(ctx context.Context, id string, status domain.VersionStatus) error
 	// UpdateRoutineVersionNote changes the free-text note on a version.
 	UpdateRoutineVersionNote(ctx context.Context, id, note string) error
+
+	// ListVersionAssignments returns the version schedule, oldest StartDate
+	// first.
+	ListVersionAssignments(ctx context.Context) ([]domain.VersionAssignment, error)
+	// SetVersionAssignment upserts the assignment for its StartDate (one version
+	// per boundary date).
+	SetVersionAssignment(ctx context.Context, a domain.VersionAssignment) error
+	// DeleteVersionAssignment removes the boundary at startDate.
+	DeleteVersionAssignment(ctx context.Context, startDate string) error
 }

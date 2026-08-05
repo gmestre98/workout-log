@@ -19,6 +19,10 @@ vi.mock("./api", async () => {
       deleteVersion: vi.fn().mockResolvedValue(undefined),
       setVersionStatus: vi.fn().mockResolvedValue({}),
       activateVersion: vi.fn().mockResolvedValue({}),
+      loadVersion: vi.fn().mockResolvedValue([]),
+      listSchedule: vi.fn().mockResolvedValue([]),
+      setAssignment: vi.fn().mockResolvedValue({}),
+      deleteAssignment: vi.fn().mockResolvedValue(undefined),
     },
   };
 });
