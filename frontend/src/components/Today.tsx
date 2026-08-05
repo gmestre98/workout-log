@@ -3,7 +3,7 @@ import { api } from "../api";
 import type { DayLog, Exercise, ExerciseLog, RoutineVersion, VersionAssignment } from "../types";
 import {
   addDaysISO, computeStreak, dayCompletion, dayHeader, effectiveVersionId, exerciseCompletion,
-  formatPercent, newLog, slotColor, todayISO,
+  formatPercent, newLog, routineForDate, slotColor, todayISO,
 } from "../format";
 import { Ring } from "./Ring";
 import { LogSheet } from "./LogSheet";
@@ -17,7 +17,7 @@ const dayHasActivity = (d: DayLog) =>
 
 export function Today() {
   const [date, setDate] = useState(today);
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [liveExercises, setLiveExercises] = useState<Exercise[]>([]);
   const [day, setDay] = useState<DayLog | null>(null);
   const [activeDates, setActiveDates] = useState<Set<string>>(new Set());
   const [schedule, setSchedule] = useState<VersionAssignment[]>([]);
@@ -54,12 +54,20 @@ export function Today() {
     Promise.all([api.listExercises(), api.getDay(date)])
       .then(([exs, d]) => {
         if (cancelled) return;
-        setExercises(exs.filter((e) => e.active));
+        setLiveExercises(exs);
         setDay(d);
       })
       .catch((e) => !cancelled && setError(String(e.message ?? e)));
     return () => { cancelled = true; };
   }, [date]);
+
+  // The routine shown for the viewed date: the version scheduled for that date
+  // (so past days render against the routine that was actually in effect then),
+  // falling back to the live routine for the current version or unscheduled days.
+  const exercises = useMemo(
+    () => routineForDate(date, schedule, versions, liveExercises).filter((e) => e.active),
+    [date, schedule, versions, liveExercises]
+  );
 
   const scheduleSave = useCallback((next: DayLog) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);

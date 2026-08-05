@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { DayLog, Exercise } from "../types";
-import { dayCompletion, dayHeader, formatPercent, heatLevel, monthRange, todayISO } from "../format";
+import type { DayLog, Exercise, RoutineVersion, VersionAssignment } from "../types";
+import { dayCompletion, dayHeader, formatPercent, heatLevel, monthRange, routineForDate, todayISO } from "../format";
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export function History() {
   const [month, setMonth] = useState(todayISO().slice(0, 7)); // YYYY-MM
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [live, setLive] = useState<Exercise[]>([]);
+  const [schedule, setSchedule] = useState<VersionAssignment[]>([]);
+  const [versions, setVersions] = useState<RoutineVersion[]>([]);
   const [days, setDays] = useState<DayLog[] | null>(null);
   const [error, setError] = useState("");
 
@@ -15,10 +17,17 @@ export function History() {
     const { from, to } = monthRange(`${month}-01`);
     setDays(null);
     setError("");
-    Promise.all([api.listExercises(), api.listDays(from, to)])
-      .then(([exs, ds]) => { setExercises(exs.filter((e) => e.active)); setDays(ds); })
+    Promise.all([api.listExercises(), api.listDays(from, to), api.listSchedule(), api.listVersions()])
+      .then(([exs, ds, sch, vs]) => { setLive(exs); setDays(ds); setSchedule(sch); setVersions(vs); })
       .catch((e) => setError(String(e.message ?? e)));
   }, [month]);
+
+  // The routine that applied on a given day (past months render against the
+  // version in effect then, not the current routine).
+  const routineFor = useCallback(
+    (d: string) => routineForDate(d, schedule, versions, live).filter((e) => e.active),
+    [schedule, versions, live]
+  );
 
   const byDate = useMemo(() => {
     const m = new Map<string, DayLog>();
@@ -34,13 +43,13 @@ export function History() {
     for (let i = 0; i < leadBlanks; i++) out.push({ level: -1 });
     for (let d = 1; d <= lastDay; d++) {
       const date = `${month}-${String(d).padStart(2, "0")}`;
-      const comp = dayCompletion(exercises, byDate.get(date));
+      const comp = dayCompletion(routineFor(date), byDate.get(date));
       out.push({ date, level: heatLevel(comp), today: date === todayISO() });
     }
     return out;
-  }, [leadBlanks, lastDay, month, exercises, byDate]);
+  }, [leadBlanks, lastDay, month, routineFor, byDate]);
 
-  const activeDays = (days ?? []).filter((d) => dayCompletion(exercises, d) > 0).length;
+  const activeDays = (days ?? []).filter((d) => dayCompletion(routineFor(d.date), d) > 0).length;
   const recent = useMemo(
     () => [...(days ?? [])].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8),
     [days]
@@ -70,7 +79,7 @@ export function History() {
               {cells.map((c, i) =>
                 c.level < 0
                   ? <i key={i} style={{ background: "transparent" }} />
-                  : <i key={i} className={`l${c.level} ${c.today ? "today" : ""}`.trim()} title={c.date ? `${c.date}: ${formatPercent(byDate.has(c.date) ? dayCompletion(exercises, byDate.get(c.date)) : 0)}` : ""} />
+                  : <i key={i} className={`l${c.level} ${c.today ? "today" : ""}`.trim()} title={c.date ? `${c.date}: ${formatPercent(byDate.has(c.date) ? dayCompletion(routineFor(c.date), byDate.get(c.date)) : 0)}` : ""} />
               )}
             </div>
             <div className="legend-row">
@@ -85,7 +94,7 @@ export function History() {
           ) : (
             <div className="card" style={{ padding: "4px 14px" }}>
               {recent.map((d) => {
-                const comp = dayCompletion(exercises, d);
+                const comp = dayCompletion(routineFor(d.date), d);
                 const h = dayHeader(d.date);
                 const label = comp >= 1 ? "Full day" : comp > 0 ? "Partial day" : "Rest day";
                 const barCls = comp >= 1 ? "bar g" : comp > 0 ? "bar" : "bar zero";

@@ -26,7 +26,11 @@ func (u Unit) Valid() bool {
 // Exercise is one row of the routine: e.g. "4 sets of 8 pull-ups" in the
 // "Wake up" slot. It is the configurable part of the app.
 type Exercise struct {
-	ID            string `json:"id" firestore:"-"` // doc ID, not stored as a field
+	// ID is the top-level document ID, and is ALSO stored as a field ("id") so
+	// it survives when an Exercise is embedded inside a RoutineVersion snapshot.
+	// With firestore:"-" the ID was dropped in snapshots, so restoring/activating
+	// a version regenerated new IDs and orphaned historical day logs.
+	ID            string `json:"id" firestore:"id"`
 	TimeSlot      string `json:"timeSlot" firestore:"timeSlot"`
 	Name          string `json:"name" firestore:"name"`
 	PlannedSets   int    `json:"plannedSets" firestore:"plannedSets"`

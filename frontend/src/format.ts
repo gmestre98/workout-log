@@ -193,6 +193,26 @@ export function effectiveVersionId(
   return best?.versionId;
 }
 
+// routineForDate returns the exercises that applied on a given date, so past
+// days render against the routine that was actually in effect then rather than
+// the current one. It uses the version scheduled for the date (an effective-
+// dated snapshot); for the current version, or when nothing is scheduled, it
+// returns the live routine. Callers still filter to active exercises.
+export function routineForDate<E extends { active: boolean; sortOrder: number }>(
+  date: string,
+  schedule: { startDate: string; versionId: string }[],
+  versions: { id: string; status: string; exercises: E[] }[],
+  live: E[]
+): E[] {
+  const vid = effectiveVersionId(schedule, date);
+  if (!vid) return live;
+  const current = versions.find((v) => v.status === "current");
+  if (current && vid === current.id) return live; // current → editable live routine
+  const v = versions.find((x) => x.id === vid);
+  if (!v || v.exercises.length === 0) return live;
+  return [...v.exercises].sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
 // monthLabel formats a YYYY-MM-DD as "Jul 2026".
 export function monthLabel(iso: string): string {
   const [y, m] = iso.split("-").map(Number);

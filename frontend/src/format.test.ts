@@ -19,6 +19,7 @@ import {
   effectiveVersionId,
   firstOfMonth,
   monthLabel,
+  routineForDate,
 } from "./format";
 import type { DayLog, Exercise } from "./types";
 
@@ -103,6 +104,32 @@ describe("effectiveVersionId", () => {
   });
   it("does not depend on input order", () => {
     expect(effectiveVersionId([...sched].reverse(), "2026-07-15")).toBe("vA");
+  });
+});
+
+describe("routineForDate", () => {
+  const ex = (tag: string, sortOrder: number) => ({ tag, active: true, sortOrder });
+  const july = [ex("j2", 1), ex("j1", 0)];
+  const live = [ex("live", 0)];
+  const schedule = [
+    { startDate: "2026-07-01", versionId: "vJul" },
+    { startDate: "2026-08-01", versionId: "vAug" },
+  ];
+  const versions = [
+    { id: "vAug", status: "current", exercises: [ex("aug", 0)] },
+    { id: "vJul", status: "past", exercises: july },
+  ];
+
+  it("uses a past version's snapshot for dates it covers, sorted", () => {
+    const r = routineForDate("2026-07-15", schedule, versions, live);
+    expect(r.map((e) => e.tag)).toEqual(["j1", "j2"]); // sorted by sortOrder
+  });
+  it("uses the live routine for the current version's dates", () => {
+    expect(routineForDate("2026-08-10", schedule, versions, live).map((e) => e.tag)).toEqual(["live"]);
+  });
+  it("falls back to live when no assignment or version is missing/empty", () => {
+    expect(routineForDate("2026-06-01", schedule, versions, live).map((e) => e.tag)).toEqual(["live"]);
+    expect(routineForDate("2026-07-15", schedule, [{ id: "vJul", status: "past", exercises: [] }], live).map((e) => e.tag)).toEqual(["live"]);
   });
 });
 

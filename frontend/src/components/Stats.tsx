@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { DayLog, Exercise } from "../types";
+import type { DayLog, Exercise, RoutineVersion, VersionAssignment } from "../types";
 import {
-  addDaysISO, computeStreak, dayCompletion, formatPercent, monthRange, muscleBreakdown, todayISO,
+  addDaysISO, computeStreak, dayCompletion, formatPercent, monthRange, muscleBreakdown, routineForDate, todayISO,
 } from "../format";
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -11,7 +11,9 @@ const dayHasActivity = (d: DayLog) => Object.values(d.exercises).some((l) => l.s
 
 export function Stats() {
   const [month, setMonth] = useState(todayISO().slice(0, 7));
-  const [exercises, setExercises] = useState<Exercise[]>([]);
+  const [live, setLive] = useState<Exercise[]>([]);
+  const [schedule, setSchedule] = useState<VersionAssignment[]>([]);
+  const [versions, setVersions] = useState<RoutineVersion[]>([]);
   const [days, setDays] = useState<DayLog[] | null>(null);
   const [streak, setStreak] = useState(0);
   const [prevAvg, setPrevAvg] = useState<number | null>(null);
@@ -27,19 +29,30 @@ export function Stats() {
       api.listExercises(),
       api.listDays(from, to),
       api.listDays(addDaysISO(todayISO(), -90), todayISO()),
-      api.summary(prev.from, prev.to),
+      api.listDays(prev.from, prev.to),
+      api.listSchedule(),
+      api.listVersions(),
     ])
-      .then(([exs, ds, streakDays, prevSummary]) => {
-        const active = exs.filter((e) => e.active);
-        setExercises(active);
+      .then(([exs, ds, streakDays, prevDays, sch, vs]) => {
+        setLive(exs);
         setDays(ds);
+        setSchedule(sch);
+        setVersions(vs);
         const set = new Set<string>();
         for (const d of streakDays) if (dayHasActivity(d)) set.add(d.date);
         setStreak(computeStreak(set, todayISO()));
-        setPrevAvg(prevSummary.days > 0 ? prevSummary.avgCompletion : null);
+        // Previous-month average, against the routine that applied that month.
+        const prevRoutine = routineForDate(prev.from, sch, vs, exs).filter((e) => e.active);
+        setPrevAvg(prevDays.length ? prevDays.reduce((a, d) => a + dayCompletion(prevRoutine, d), 0) / prevDays.length : null);
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, [month]);
+
+  // The routine in effect for the viewed month.
+  const exercises = useMemo(
+    () => routineForDate(`${month}-01`, schedule, versions, live).filter((e) => e.active),
+    [month, schedule, versions, live]
+  );
 
   const [year, mon] = month.split("-").map(Number);
   const byDate = useMemo(() => {
