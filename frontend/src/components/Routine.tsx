@@ -269,7 +269,7 @@ export function Routine() {
       {deleteFor && (
         <ConfirmDialog
           title="Delete version?"
-          message={`This permanently removes the saved version from ${fmtDate(deleteFor.createdAt)}. Your routine and logged history are not affected.`}
+          message={`This permanently removes the version "${versionName(deleteFor)}". Your routine and logged history are not affected.`}
           confirmLabel="Delete"
           danger
           busy={busy}
@@ -390,8 +390,10 @@ function VersionCard({
     <div className={`card version ${isCurrent ? "is-current" : ""}`}>
       <div className="version-top">
         <div>
-          <div className="version-date num">{fmtDate(version.createdAt)}</div>
-          <div className="tiny muted">{version.exercises.length} exercises{version.note ? ` · ${version.note}` : ""}</div>
+          <div className="version-name">{versionName(version)}</div>
+          <div className="tiny muted">
+            {version.exercises.length} exercises{version.note?.trim() ? ` · saved ${fmtDate(version.createdAt)}` : ""}
+          </div>
         </div>
         <span className={`pillbadge ${meta.cls}`}>{meta.label}</span>
       </div>

@@ -368,7 +368,7 @@ input, select { font-family: inherit; }
 .version { padding: 14px 15px; margin-bottom: 10px; }
 .version.is-current { border-color: color-mix(in srgb, var(--done) 45%, transparent); }
 .version-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.version-date { font-size: 14.5px; font-weight: 720; }
+.version-name { font-size: 15.5px; font-weight: 770; letter-spacing: -.01em; }
 .version-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .version-actions .link { padding: 2px 0; }
 .version-actions-l { display: flex; align-items: center; gap: 14px; }
