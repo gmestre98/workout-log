@@ -21,6 +21,7 @@ export interface Exercise {
 export interface SetEntry {
   completed: boolean;
   actualAmount: number;
+  seconds?: number; // wall-clock duration of the set if timed; 0/absent otherwise
 }
 
 export interface ExerciseLog {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clockTotals, type ClockState } from "./timer";
+import { clockTotals, workoutClock, type ClockState } from "./timer";
 
 const base: ClockState = { phase: "idle", trainingMs: 0, restMs: 0, segStart: null };
 
@@ -37,5 +37,26 @@ describe("clockTotals", () => {
     expect(t.totalMs).toBe(12000);
     expect(t.paused).toBe(true);
     expect(t.started).toBe(true);
+  });
+});
+
+describe("persisted schema", () => {
+  it("discards clock data from an older/unknown schema instead of mis-merging", () => {
+    // Old-shape blob (no schema version) — the kind that previously scrambled
+    // the training/rest split.
+    localStorage.setItem(
+      "wl.clock.2099-01-02",
+      JSON.stringify({ running: true, accumulatedMs: 600000, restMs: 120000 })
+    );
+    const t = clockTotals(workoutClock.get("2099-01-02"), 0);
+    expect(t.started).toBe(false);
+    expect(t.totalMs).toBe(0);
+  });
+
+  it("round-trips current-schema state", () => {
+    workoutClock.startTraining("2099-01-03");
+    const raw = JSON.parse(localStorage.getItem("wl.clock.2099-01-03")!);
+    expect(raw.v).toBe(2);
+    expect(raw.phase).toBe("training");
   });
 });

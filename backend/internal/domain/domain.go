@@ -50,9 +50,12 @@ type Exercise struct {
 
 // SetEntry is the result of a single set on a given day. ActualAmount is what
 // was actually done (reps/seconds/minutes); it may be less than planned.
+// Seconds is the wall-clock duration of the set when it was timed with the
+// workout timer, or 0 when the set was logged without timing.
 type SetEntry struct {
 	Completed    bool `json:"completed" firestore:"completed"`
 	ActualAmount int  `json:"actualAmount" firestore:"actualAmount"`
+	Seconds      int  `json:"seconds" firestore:"seconds"`
 }
 
 // ExerciseLog is how one exercise went on one day. PlannedSets/PlannedAmount

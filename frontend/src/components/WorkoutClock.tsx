@@ -23,7 +23,7 @@ export function WorkoutClock({
   date: string;
   exercises: Exercise[];
   logFor: (ex: Exercise) => ExerciseLog;
-  onLogSet: (ex: Exercise, amount: number) => void;
+  onLogSet: (ex: Exercise, amount: number, seconds: number) => void;
 }) {
   const session = useWorkoutClock(date);
   const paused = session.paused;
@@ -117,16 +117,16 @@ export function WorkoutClock({
 
   const logSet = () => {
     if (allDone) return;
+    const elapsedSecs = Math.round(setElapsedMs / 1000);
     let amount: number;
     if (unit === "reps") {
       amount = repVal;
     } else if (setElapsedMs === 0) {
       amount = selected.plannedAmount; // logged without timing → assume planned
     } else {
-      const secs = Math.round(setElapsedMs / 1000);
-      amount = unit === "minutes" ? Math.max(1, Math.round(secs / 60)) : secs;
+      amount = unit === "minutes" ? Math.max(1, Math.round(elapsedSecs / 60)) : elapsedSecs;
     }
-    onLogSet(selected, amount);
+    onLogSet(selected, amount, elapsedSecs);
 
     // Reset the set stopwatch and move the session into its resting phase.
     accumRef.current = 0;

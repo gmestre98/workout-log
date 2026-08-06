@@ -107,14 +107,14 @@ export function Today() {
   );
 
   // logSet marks the next incomplete set of ex as done with the given amount
-  // (reps, or seconds/minutes held). Used by the exercise-bound timer to store
-  // a set directly. No-op once every set is complete.
+  // (reps, or seconds/minutes held) and its timed duration in seconds. Used by
+  // the exercise-bound timer to store a set directly. No-op once complete.
   const logSet = useCallback(
-    (ex: Exercise, amount: number) =>
+    (ex: Exercise, amount: number, seconds = 0) =>
       update(ex, (l) => {
         const i = l.sets.findIndex((s) => !s.completed);
         if (i < 0) return l;
-        const sets = l.sets.map((s, k) => (k === i ? { completed: true, actualAmount: amount } : s));
+        const sets = l.sets.map((s, k) => (k === i ? { completed: true, actualAmount: amount, seconds } : s));
         return { ...l, sets };
       }),
     [update]

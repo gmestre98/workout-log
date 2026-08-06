@@ -31,13 +31,29 @@ const store = new Map<string, ClockState>();
 const listeners = new Set<() => void>();
 const key = (date: string) => `wl.clock.${date}`;
 
+// Schema version of the persisted clock. Bump this whenever ClockState changes
+// shape — stored data from an older schema is discarded rather than mis-merged,
+// which is what previously scrambled a day's training/rest split.
+const SCHEMA = 2;
+
 function load(date: string): ClockState {
   const cached = store.get(date);
   if (cached) return cached;
   let state = EMPTY;
   try {
     const raw = localStorage.getItem(key(date));
-    if (raw) state = { ...EMPTY, ...JSON.parse(raw) };
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p && p.v === SCHEMA && typeof p.phase === "string") {
+        state = {
+          phase: p.phase,
+          trainingMs: p.trainingMs ?? 0,
+          restMs: p.restMs ?? 0,
+          segStart: p.segStart ?? null,
+        };
+      }
+      // Any other shape (older schema, corrupt) is ignored → clean slate.
+    }
   } catch {
     /* ignore malformed storage */
   }
@@ -48,7 +64,7 @@ function load(date: string): ClockState {
 function set(date: string, next: ClockState) {
   store.set(date, next);
   try {
-    localStorage.setItem(key(date), JSON.stringify(next));
+    localStorage.setItem(key(date), JSON.stringify({ v: SCHEMA, ...next }));
   } catch {
     /* ignore quota/availability errors */
   }

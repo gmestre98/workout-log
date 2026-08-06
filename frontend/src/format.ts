@@ -86,6 +86,7 @@ export function newLog(exercise: {
   const sets: SetEntry[] = Array.from({ length: count }, () => ({
     completed: false,
     actualAmount: exercise.plannedAmount,
+    seconds: 0,
   }));
   return {
     exerciseId: exercise.id,

@@ -113,7 +113,10 @@ export function LogSheet({
                 >
                   {s.completed ? <IconCheck /> : (meta.side ?? i + 1)}
                 </button>
-                <span className="lbl">{meta.label}</span>
+                <span className="lbl">
+                  {meta.label}
+                  {s.seconds ? <span className="tiny muted" style={{ marginLeft: 8, fontWeight: 500 }}>· {mmss(s.seconds)}</span> : null}
+                </span>
                 <div className="stepper">
                   <button className="stepbtn" onClick={() => bump(i, -1)} aria-label="Decrease reps">–</button>
                   <span className="stepval">{s.actualAmount}</span>
