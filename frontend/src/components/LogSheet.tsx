@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Exercise, ExerciseLog } from "../types";
 import { exerciseCompletion, formatPercent, setAllSets, setMeta, unitLabel } from "../format";
 import { workoutClock } from "../timer";
@@ -20,34 +20,23 @@ export function LogSheet({
   const suffix = unitLabel(exercise.unit);
   const pct = exerciseCompletion(log);
   const [restLeft, setRestLeft] = useState<number | null>(null);
-  const resting = useRef(false);
   const firstIncomplete = log.sets.findIndex((s) => !s.completed);
   const allDone = log.sets.length > 0 && log.sets.every((s) => s.completed);
   const toggleAll = () => onChange((l) => setAllSets(l, !allDone));
 
-  // Ends the current rest segment in both the local countdown and the shared
-  // workout clock, so the clock's "Rest" total reflects real rest taken.
-  const endRest = () => {
-    setRestLeft(null);
-    if (resting.current) {
-      resting.current = false;
-      workoutClock.stopRest(date);
-    }
-  };
+  // A visual between-set countdown. The session clock counts all non-training
+  // time as rest on its own, so this is purely a "next set coming up" cue.
+  const endRest = () => setRestLeft(null);
 
-  // Rest countdown; starts when a set is completed and restSeconds > 0.
   useEffect(() => {
     if (restLeft === null) return;
     if (restLeft <= 0) {
-      endRest();
+      setRestLeft(null);
       return;
     }
     const t = setTimeout(() => setRestLeft((v) => (v === null ? null : v - 1)), 1000);
     return () => clearTimeout(t);
   }, [restLeft]);
-
-  // If the sheet is closed mid-rest, fold the elapsed rest into the clock.
-  useEffect(() => () => { if (resting.current) workoutClock.stopRest(date); }, [date]);
 
   const toggle = (i: number) => {
     let willComplete = false;
@@ -56,15 +45,11 @@ export function LogSheet({
       const sets = l.sets.map((s, idx) => (idx === i ? { ...s, completed: !s.completed } : s));
       return { ...l, sets };
     });
-    // Completing a set starts the workout clock (if idle) and, when the
-    // exercise defines a rest, a rest countdown that the clock tracks.
+    // Completing a set moves the session clock into its resting phase (starting
+    // the workout if idle) and shows the between-set countdown.
     if (willComplete) {
-      workoutClock.start(date);
-      if (exercise.restSeconds > 0) {
-        resting.current = true;
-        workoutClock.startRest(date);
-        setRestLeft(exercise.restSeconds);
-      }
+      workoutClock.stopTraining(date);
+      if (exercise.restSeconds > 0) setRestLeft(exercise.restSeconds);
     }
   };
 

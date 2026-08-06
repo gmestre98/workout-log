@@ -1,42 +1,41 @@
 import { describe, it, expect } from "vitest";
 import { clockTotals, type ClockState } from "./timer";
 
-const base: ClockState = {
-  running: false,
-  startedAt: null,
-  accumulatedMs: 0,
-  restMs: 0,
-  restStartedAt: null,
-};
+const base: ClockState = { phase: "idle", trainingMs: 0, restMs: 0, segStart: null };
 
 describe("clockTotals", () => {
   it("reports an idle, unstarted clock", () => {
     const t = clockTotals(base, 1000);
     expect(t.totalMs).toBe(0);
-    expect(t.activeMs).toBe(0);
     expect(t.started).toBe(false);
-    expect(t.running).toBe(false);
+    expect(t.paused).toBe(false);
   });
 
-  it("adds the live running segment to accumulated time", () => {
-    const s: ClockState = { ...base, running: true, startedAt: 1000, accumulatedMs: 5000 };
-    const t = clockTotals(s, 4000); // 3s into the current segment
+  it("adds the live training segment", () => {
+    const s: ClockState = { ...base, phase: "training", segStart: 1000, trainingMs: 5000 };
+    const t = clockTotals(s, 4000); // 3s into the current set
+    expect(t.trainingMs).toBe(8000);
+    expect(t.restMs).toBe(0);
     expect(t.totalMs).toBe(8000);
-    expect(t.started).toBe(true);
-    expect(t.running).toBe(true);
+    expect(t.training).toBe(true);
   });
 
-  it("splits active vs rest, counting a live rest segment", () => {
-    const s: ClockState = { ...base, running: true, startedAt: 0, accumulatedMs: 0, restMs: 2000, restStartedAt: 6000 };
-    const t = clockTotals(s, 10000); // total 10s, rest = 2s + 4s live = 6s
-    expect(t.totalMs).toBe(10000);
-    expect(t.restMs).toBe(6000);
-    expect(t.activeMs).toBe(4000);
+  it("adds the live resting segment and splits total", () => {
+    const s: ClockState = { ...base, phase: "resting", segStart: 6000, trainingMs: 10000, restMs: 2000 };
+    const t = clockTotals(s, 10000); // 4s into rest
+    expect(t.trainingMs).toBe(10000);
+    expect(t.restMs).toBe(6000); // 2s folded + 4s live
+    expect(t.totalMs).toBe(16000);
     expect(t.resting).toBe(true);
   });
 
-  it("never reports negative active time", () => {
-    const s: ClockState = { ...base, accumulatedMs: 1000, restMs: 5000 };
-    expect(clockTotals(s, 0).activeMs).toBe(0);
+  it("accrues nothing while paused", () => {
+    const s: ClockState = { ...base, phase: "paused", trainingMs: 9000, restMs: 3000, segStart: null };
+    const t = clockTotals(s, 999999);
+    expect(t.trainingMs).toBe(9000);
+    expect(t.restMs).toBe(3000);
+    expect(t.totalMs).toBe(12000);
+    expect(t.paused).toBe(true);
+    expect(t.started).toBe(true);
   });
 });

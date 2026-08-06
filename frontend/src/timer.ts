@@ -1,29 +1,31 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-// A per-day workout clock, shared between the Today screen (which shows and
-// controls it) and the LogSheet (which folds rest countdowns into it). State is
-// persisted to localStorage so the running clock survives a refresh mid-workout.
+// A per-day workout clock shared between the Today screen (which shows and
+// controls it) and the LogSheet. It splits the session into TRAINING time (while
+// a set is actively being timed) and REST time (all other time once the workout
+// has started). "Pause workout" freezes both so a long break — e.g. stopping and
+// finishing later the same day — is not counted. State is persisted so a running
+// clock survives a refresh.
 //
-// Three numbers are derived from the raw state:
-//   total  = time since the workout started (running segments accumulated)
-//   rest   = time spent in between-set rest countdowns
-//   active = total - rest  (actual performance time)
+// Phases:
+//   idle     — not started yet
+//   training — a set stopwatch is running → training time accrues
+//   resting  — workout active but not timing a set → rest time accrues
+//   paused   — workout stopped → nothing accrues
+//
+// Only the current segment is "live"; completed segments are folded into
+// trainingMs / restMs.
+
+export type Phase = "idle" | "training" | "resting" | "paused";
 
 export interface ClockState {
-  running: boolean;
-  startedAt: number | null; // epoch ms of the current running segment
-  accumulatedMs: number; // completed running segments
-  restMs: number; // completed rest segments
-  restStartedAt: number | null; // epoch ms of the current rest segment
+  phase: Phase;
+  trainingMs: number;
+  restMs: number;
+  segStart: number | null; // epoch ms the current training/resting segment began
 }
 
-const EMPTY: ClockState = {
-  running: false,
-  startedAt: null,
-  accumulatedMs: 0,
-  restMs: 0,
-  restStartedAt: null,
-};
+const EMPTY: ClockState = { phase: "idle", trainingMs: 0, restMs: 0, segStart: null };
 
 const store = new Map<string, ClockState>();
 const listeners = new Set<() => void>();
@@ -53,82 +55,85 @@ function set(date: string, next: ClockState) {
   for (const l of listeners) l();
 }
 
+// fold closes the current live segment into its accumulator and clears segStart.
+function fold(s: ClockState, now: number): ClockState {
+  if (s.phase === "training" && s.segStart !== null) {
+    return { ...s, trainingMs: s.trainingMs + (now - s.segStart), segStart: null };
+  }
+  if (s.phase === "resting" && s.segStart !== null) {
+    return { ...s, restMs: s.restMs + (now - s.segStart), segStart: null };
+  }
+  return { ...s, segStart: null };
+}
+
 export const workoutClock = {
   get: load,
 
-  // Start (or resume) the main clock.
-  start(date: string) {
-    const s = load(date);
-    if (s.running) return;
-    set(date, { ...s, running: true, startedAt: Date.now() });
+  // Begin timing a set. Resumes the workout if it was paused/idle.
+  startTraining(date: string) {
+    const now = Date.now();
+    const s = fold(load(date), now);
+    set(date, { ...s, phase: "training", segStart: now });
   },
 
-  // Pause the main clock, folding any open running and rest segments in.
-  pause(date: string) {
-    const s = load(date);
+  // Stop timing a set and start (or continue) resting. From idle this simply
+  // starts the workout in the resting phase — used when a set is logged without
+  // the stopwatch.
+  stopTraining(date: string) {
     const now = Date.now();
-    set(date, {
-      running: false,
-      startedAt: null,
-      accumulatedMs: s.accumulatedMs + (s.running && s.startedAt !== null ? now - s.startedAt : 0),
-      restMs: s.restMs + (s.restStartedAt !== null ? now - s.restStartedAt : 0),
-      restStartedAt: null,
-    });
+    const s = fold(load(date), now);
+    set(date, { ...s, phase: "resting", segStart: now });
+  },
+
+  // Freeze the whole workout — neither training nor rest accrues.
+  pauseWorkout(date: string) {
+    const now = Date.now();
+    const s = fold(load(date), now);
+    set(date, { ...s, phase: "paused", segStart: null });
+  },
+
+  // Resume a paused workout back into the resting phase.
+  resumeWorkout(date: string) {
+    const s = load(date);
+    if (s.phase !== "paused") return;
+    set(date, { ...s, phase: "resting", segStart: Date.now() });
   },
 
   reset(date: string) {
     set(date, { ...EMPTY });
   },
-
-  // Begin a rest segment (called when a set is completed). Ensures the main
-  // clock is running, since resting implies a workout is underway.
-  startRest(date: string) {
-    const s = load(date);
-    const now = Date.now();
-    set(date, {
-      ...s,
-      running: true,
-      startedAt: s.startedAt ?? now,
-      restStartedAt: s.restStartedAt ?? now,
-    });
-  },
-
-  // End the current rest segment (timer elapsed or skipped).
-  stopRest(date: string) {
-    const s = load(date);
-    if (s.restStartedAt === null) return;
-    set(date, {
-      ...s,
-      restMs: s.restMs + (Date.now() - s.restStartedAt),
-      restStartedAt: null,
-    });
-  },
 };
 
 export interface ClockTotals {
-  running: boolean;
-  resting: boolean;
-  totalMs: number;
+  phase: Phase;
+  trainingMs: number;
   restMs: number;
-  activeMs: number;
+  totalMs: number;
   started: boolean;
+  paused: boolean;
+  resting: boolean;
+  training: boolean;
 }
 
 export function clockTotals(s: ClockState, now: number): ClockTotals {
-  const totalMs = s.accumulatedMs + (s.running && s.startedAt !== null ? now - s.startedAt : 0);
-  const restMs = s.restMs + (s.restStartedAt !== null ? now - s.restStartedAt : 0);
+  const liveTraining = s.phase === "training" && s.segStart !== null ? now - s.segStart : 0;
+  const liveRest = s.phase === "resting" && s.segStart !== null ? now - s.segStart : 0;
+  const trainingMs = s.trainingMs + liveTraining;
+  const restMs = s.restMs + liveRest;
   return {
-    running: s.running,
-    resting: s.restStartedAt !== null,
-    totalMs,
+    phase: s.phase,
+    trainingMs,
     restMs,
-    activeMs: Math.max(0, totalMs - restMs),
-    started: totalMs > 0 || s.running,
+    totalMs: trainingMs + restMs,
+    started: s.phase !== "idle",
+    paused: s.phase === "paused",
+    resting: s.phase === "resting",
+    training: s.phase === "training",
   };
 }
 
 // useWorkoutClock returns live totals for a date, re-rendering once a second
-// while the clock (or a rest segment) is running.
+// while a training or resting segment is live (never while paused/idle).
 export function useWorkoutClock(date: string): ClockTotals {
   const state = useSyncExternalStore(
     (cb) => {
@@ -139,7 +144,7 @@ export function useWorkoutClock(date: string): ClockTotals {
     () => load(date)
   );
   const [, tick] = useState(0);
-  const live = state.running || state.restStartedAt !== null;
+  const live = state.phase === "training" || state.phase === "resting";
   useEffect(() => {
     if (!live) return;
     const t = setInterval(() => tick((n) => n + 1), 1000);
