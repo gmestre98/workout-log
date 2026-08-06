@@ -12,7 +12,7 @@ type Draft = Omit<Exercise, "id"> & { id?: string };
 const blank = (sortOrder: number): Draft => ({
   timeSlot: DEFAULT_TIME_SLOTS[0], name: "", plannedSets: 3, plannedAmount: 10,
   unit: "reps", note: "", restSeconds: 30, muscleGroup: "", equipment: "None",
-  sortOrder, active: true,
+  sortOrder, active: true, perSide: false,
 });
 
 const fmtDate = (iso: string) => {
@@ -220,7 +220,7 @@ export function Routine() {
               <div key={ex.id} className="card rl" style={ex.active ? undefined : { opacity: 0.55 }}>
                 <div className="body">
                   <div className="n">{ex.name}{!ex.active && <span className="pillbadge" style={{ marginLeft: 6 }}>off</span>}</div>
-                  <div className="m">{ex.plannedSets} × {ex.plannedAmount} {ex.unit === "reps" ? "" : ex.unit === "seconds" ? "s" : "min"}{ex.restSeconds > 0 ? ` · ${ex.restSeconds}s rest` : ""}{ex.note ? ` · ${ex.note}` : ""}</div>
+                  <div className="m">{ex.plannedSets} × {ex.plannedAmount} {ex.unit === "reps" ? "" : ex.unit === "seconds" ? "s" : "min"}{ex.perSide ? " · per side" : ""}{ex.restSeconds > 0 ? ` · ${ex.restSeconds}s rest` : ""}{ex.note ? ` · ${ex.note}` : ""}</div>
                 </div>
                 {ex.muscleGroup && <span className="pillbadge">{primaryMuscle(ex.muscleGroup)}</span>}
                 <button className="link" onClick={() => setDraft({ ...ex })}>Edit</button>
@@ -554,6 +554,8 @@ function ExerciseForm({
           <label>Equipment<input value={draft.equipment} onChange={(e) => set("equipment", e.target.value)} /></label>
         </div>
         <label>Target muscle group<input value={draft.muscleGroup} onChange={(e) => set("muscleGroup", e.target.value)} /></label>
+        <label className="check"><input type="checkbox" checked={draft.perSide} onChange={(e) => set("perSide", e.target.checked)} />Left / right sides (e.g. side plank, split squats)</label>
+        {draft.perSide && <p className="tiny muted" style={{ margin: "-6px 2px 0" }}>Each set is logged for both sides — {draft.plannedSets} × {draft.plannedAmount} {draft.unit === "reps" ? "reps" : draft.unit === "seconds" ? "s" : "min"} per side.</p>}
         <label className="check"><input type="checkbox" checked={draft.active} onChange={(e) => set("active", e.target.checked)} />Active (shown in daily tracking)</label>
         <div className="formbtns">
           <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>

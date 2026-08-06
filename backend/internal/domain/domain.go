@@ -42,6 +42,10 @@ type Exercise struct {
 	Equipment     string `json:"equipment" firestore:"equipment"`
 	SortOrder     int    `json:"sortOrder" firestore:"sortOrder"`
 	Active        bool   `json:"active" firestore:"active"`
+	// PerSide marks an exercise done on both sides (e.g. side plank, split
+	// squats). When true each planned set is tracked once per side, so a day log
+	// holds 2*PlannedSets entries ordered left, right, left, right…
+	PerSide bool `json:"perSide" firestore:"perSide"`
 }
 
 // SetEntry is the result of a single set on a given day. ActualAmount is what

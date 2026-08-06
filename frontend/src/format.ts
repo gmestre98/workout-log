@@ -1,17 +1,28 @@
 import type { DayLog, Exercise, ExerciseLog, SetEntry, Unit } from "./types";
 
 // exerciseCompletion mirrors the backend: (sum of actual over completed sets) /
-// (plannedSets * plannedAmount), clamped to [0, 1]. Used for instant UI
-// feedback before the server round-trips.
+// (number of logged sets * plannedAmount), clamped to [0, 1]. Basing the
+// denominator on the logged set count (not plannedSets) keeps per-side logs —
+// which hold two entries per planned set — correct, while being identical for
+// ordinary logs where the counts match.
 export function exerciseCompletion(log: {
-  plannedSets: number;
+  plannedSets?: number; // ignored; kept so ExerciseLog objects pass cleanly
   plannedAmount: number;
   sets: SetEntry[];
 }): number {
-  const planned = log.plannedSets * log.plannedAmount;
+  const planned = log.sets.length * log.plannedAmount;
   if (planned <= 0) return 0;
   const done = log.sets.reduce((sum, s) => (s.completed ? sum + s.actualAmount : sum), 0);
   return Math.min(1, Math.max(0, done / planned));
+}
+
+// setMeta labels a set entry for display. For per-side exercises entries come in
+// left/right pairs, so index 0,1 are "Set 1 · Left/Right", 2,3 are "Set 2", etc.
+export function setMeta(index: number, perSide: boolean): { label: string; side: "L" | "R" | null } {
+  if (!perSide) return { label: `Set ${index + 1}`, side: null };
+  const round = Math.floor(index / 2) + 1;
+  const side: "L" | "R" = index % 2 === 0 ? "L" : "R";
+  return { label: `Set ${round} · ${side === "L" ? "Left" : "Right"}`, side };
 }
 
 // formatPercent renders a fraction as a whole-number percentage.
@@ -61,15 +72,18 @@ export function monthRange(dateISO: string): { from: string; to: string } {
   return { from, to };
 }
 
-// emptyLogForExercise builds a fresh log with all planned sets uncompleted and
-// pre-filled with the planned amount (so a full workout is one tap per set).
+// newLog builds a fresh log with all planned sets uncompleted and pre-filled
+// with the planned amount (so a full workout is one tap per set). Per-side
+// exercises get two entries per planned set (left, right).
 export function newLog(exercise: {
   id: string;
   plannedSets: number;
   plannedAmount: number;
   unit: Unit;
+  perSide?: boolean;
 }): ExerciseLog {
-  const sets: SetEntry[] = Array.from({ length: exercise.plannedSets }, () => ({
+  const count = exercise.perSide ? exercise.plannedSets * 2 : exercise.plannedSets;
+  const sets: SetEntry[] = Array.from({ length: count }, () => ({
     completed: false,
     actualAmount: exercise.plannedAmount,
   }));

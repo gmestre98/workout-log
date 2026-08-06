@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Exercise, ExerciseLog } from "../types";
 import { useWorkoutClock, workoutClock } from "../timer";
-import { exerciseCompletion, formatDuration, unitLabel } from "../format";
+import { exerciseCompletion, formatDuration, setMeta, unitLabel } from "../format";
 import { toast } from "../toast";
 import { ConfirmDialog } from "./Modal";
 import { IconTimer } from "./icons";
@@ -165,11 +165,14 @@ export function WorkoutClock({
   };
 
   const currentSetNo = Math.min(doneCount + 1, totalSets);
+  const nextIdx = log.sets.findIndex((s) => !s.completed);
+  const nextMeta = setMeta(nextIdx < 0 ? totalSets - 1 : nextIdx, selected.perSide);
+  const logWord = nextMeta.side ? (nextMeta.side === "L" ? "Left" : "Right") : "set";
   const logLabel = allDone
     ? "Exercise complete"
     : isTime
-      ? `Log set${setElapsedMs > 0 ? ` · ${formatDuration(setElapsedMs)}` : ""}`
-      : `Log set · ${repVal} ${unitLabel(unit)}`;
+      ? `Log ${logWord}${setElapsedMs > 0 ? ` · ${formatDuration(setElapsedMs)}` : ""}`
+      : `Log ${logWord} · ${repVal} ${unitLabel(unit)}`;
 
   return (
     <div className="card clock">
@@ -196,7 +199,7 @@ export function WorkoutClock({
       <div className="clock-main">
         <div className="clock-total">
           <span className="clock-lab">
-            {allDone ? "All sets done" : `Set ${currentSetNo} · target ${selected.plannedAmount} ${unitLabel(unit)}`}
+            {allDone ? "All sets done" : `${nextMeta.label} · target ${selected.plannedAmount} ${unitLabel(unit)}`}
           </span>
           <span className={`clock-big num ${targetReached ? "g" : ""}`}>{formatDuration(setElapsedMs)}</span>
         </div>

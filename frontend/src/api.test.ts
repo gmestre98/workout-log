@@ -47,6 +47,7 @@ describe("api client", () => {
         equipment: "",
         sortOrder: 0,
         active: true,
+        perSide: false,
       })
     ).rejects.toThrow("plannedSets must be > 0");
   });

@@ -6,9 +6,12 @@ import "github.com/gmestre98/workout-log/backend/internal/domain"
 
 // ExerciseCompletion returns how much of a single exercise was completed on a
 // day, as a fraction in [0, 1]. It is (sum of actual amounts over completed
-// sets) / (planned sets * planned amount), capped at 1.
+// sets) / (number of logged sets * planned amount), capped at 1. Basing the
+// denominator on the logged set count (rather than PlannedSets) keeps it correct
+// for per-side exercises, whose logs hold two entries per planned set, while
+// staying identical for every ordinary log where the counts match.
 func ExerciseCompletion(log domain.ExerciseLog) float64 {
-	planned := log.PlannedSets * log.PlannedAmount
+	planned := len(log.Sets) * log.PlannedAmount
 	if planned <= 0 {
 		return 0
 	}

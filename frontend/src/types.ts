@@ -13,6 +13,9 @@ export interface Exercise {
   equipment: string;
   sortOrder: number;
   active: boolean;
+  // When true the exercise is tracked once per side (left/right), so a day log
+  // holds 2*plannedSets entries ordered left, right, left, right…
+  perSide: boolean;
 }
 
 export interface SetEntry {

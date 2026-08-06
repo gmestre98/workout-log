@@ -173,6 +173,7 @@ input, select { font-family: inherit; }
 .setchip.done { border-color: transparent; background: color-mix(in srgb, var(--done) 18%, transparent); color: var(--done); }
 .setchip.part { border-color: transparent; background: color-mix(in srgb, var(--ember) 18%, transparent); color: var(--ember); }
 .setchip svg { width: 13px; height: 13px; }
+.setchip .side { font-size: 9px; font-weight: 800; opacity: .7; letter-spacing: .02em; }
 
 /* Bars */
 .bar { height: 7px; border-radius: 999px; background: var(--track); overflow: hidden; }

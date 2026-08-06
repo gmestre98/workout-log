@@ -3,7 +3,7 @@ import { api } from "../api";
 import type { DayLog, Exercise, ExerciseLog, RoutineVersion, VersionAssignment } from "../types";
 import {
   addDaysISO, computeStreak, dayCompletion, dayHeader, effectiveVersionId, exerciseCompletion,
-  formatPercent, newLog, routineForDate, slotColor, todayISO,
+  formatPercent, newLog, routineForDate, setMeta, slotColor, todayISO,
 } from "../format";
 import { Ring } from "./Ring";
 import { LogSheet } from "./LogSheet";
@@ -263,6 +263,7 @@ function ExerciseCard({
           <div className="ex-name">{exercise.name}</div>
           <div className="ex-meta">
             {exercise.plannedSets} × {exercise.plannedAmount} {exercise.unit === "reps" ? "" : exercise.unit === "seconds" ? "s" : "min"}
+            {exercise.perSide ? " · per side" : ""}
             {exercise.note ? ` · ${exercise.note}` : ""}
             {active ? " · Now" : ""}
           </div>
@@ -272,8 +273,10 @@ function ExerciseCard({
       <div className="sets">
         {log.sets.map((s, i) => {
           const cls = s.completed ? (s.actualAmount < exercise.plannedAmount ? "part" : "done") : "";
+          const side = setMeta(i, exercise.perSide).side;
           return (
             <span key={i} className={`setchip ${cls}`}>
+              {side && <span className="side">{side}</span>}
               {s.completed && s.actualAmount >= exercise.plannedAmount ? <IconCheck /> : null}
               {s.completed ? s.actualAmount : exercise.plannedAmount}
             </span>

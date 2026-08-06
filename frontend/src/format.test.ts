@@ -20,13 +20,14 @@ import {
   firstOfMonth,
   monthLabel,
   routineForDate,
+  setMeta,
 } from "./format";
 import type { DayLog, Exercise } from "./types";
 
 const ex = (id: string, over: Partial<Exercise> = {}): Exercise => ({
   id, timeSlot: "Wake up", name: id, plannedSets: 1, plannedAmount: 10,
   unit: "reps", note: "", restSeconds: 0, muscleGroup: "Core", equipment: "None",
-  sortOrder: 0, active: true, ...over,
+  sortOrder: 0, active: true, perSide: false, ...over,
 });
 const fullLog = { exerciseId: "x", plannedSets: 1, plannedAmount: 10, unit: "reps" as const, sets: [{ completed: true, actualAmount: 10 }] };
 const day = (date: string, ids: string[]): DayLog => ({
@@ -63,6 +64,28 @@ describe("exerciseCompletion", () => {
       exerciseCompletion({ plannedSets: 1, plannedAmount: 10, sets: [{ completed: true, actualAmount: 20 }] })
     ).toBe(1);
     expect(exerciseCompletion({ plannedSets: 0, plannedAmount: 0, sets: [] })).toBe(0);
+  });
+});
+
+describe("per-side (setMeta, newLog, completion)", () => {
+  it("newLog makes two entries per set for per-side exercises", () => {
+    const log = newLog({ id: "sp", plannedSets: 2, plannedAmount: 30, unit: "seconds", perSide: true });
+    expect(log.sets.length).toBe(4);
+    const normal = newLog({ id: "n", plannedSets: 2, plannedAmount: 30, unit: "seconds" });
+    expect(normal.sets.length).toBe(2);
+  });
+  it("setMeta labels alternate left/right in rounds", () => {
+    expect(setMeta(0, true)).toEqual({ label: "Set 1 · Left", side: "L" });
+    expect(setMeta(1, true)).toEqual({ label: "Set 1 · Right", side: "R" });
+    expect(setMeta(2, true)).toEqual({ label: "Set 2 · Left", side: "L" });
+    expect(setMeta(1, false)).toEqual({ label: "Set 2", side: null });
+  });
+  it("completion counts logged entries, so one side done is 50%", () => {
+    const sets = [
+      { completed: true, actualAmount: 30 }, { completed: false, actualAmount: 30 },
+      { completed: true, actualAmount: 30 }, { completed: false, actualAmount: 30 },
+    ];
+    expect(exerciseCompletion({ plannedAmount: 30, sets })).toBe(0.5);
   });
 });
 

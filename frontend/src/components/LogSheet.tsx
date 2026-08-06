@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Exercise, ExerciseLog } from "../types";
-import { exerciseCompletion, formatPercent, setAllSets, unitLabel } from "../format";
+import { exerciseCompletion, formatPercent, setAllSets, setMeta, unitLabel } from "../format";
 import { workoutClock } from "../timer";
 import { IconCheck, IconTimer } from "./icons";
 
@@ -117,17 +117,18 @@ export function LogSheet({
         <div style={{ display: "flex", flexDirection: "column", gap: 9, marginTop: restLeft === null ? 13 : 0 }}>
           {log.sets.map((s, i) => {
             const active = i === firstIncomplete;
+            const meta = setMeta(i, exercise.perSide);
             return (
               <div key={i} className={`setrow ${s.completed ? "done" : active ? "active" : ""}`}>
                 <button
                   className={`setchip ${s.completed ? "done" : ""}`}
                   style={{ width: 32, minWidth: 32, height: 32 }}
                   onClick={() => toggle(i)}
-                  aria-label={`Toggle set ${i + 1}`}
+                  aria-label={`Toggle ${meta.label}`}
                 >
-                  {s.completed ? <IconCheck /> : i + 1}
+                  {s.completed ? <IconCheck /> : (meta.side ?? i + 1)}
                 </button>
-                <span className="lbl">Set {i + 1}</span>
+                <span className="lbl">{meta.label}</span>
                 <div className="stepper">
                   <button className="stepbtn" onClick={() => bump(i, -1)} aria-label="Decrease reps">–</button>
                   <span className="stepval">{s.actualAmount}</span>
