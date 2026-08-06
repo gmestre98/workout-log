@@ -41,9 +41,11 @@ export function Stats() {
         const set = new Set<string>();
         for (const d of streakDays) if (dayHasActivity(d)) set.add(d.date);
         setStreak(computeStreak(set, todayISO()));
-        // Previous-month average, against the routine that applied that month.
+        // Previous-month average, against the routine that applied that month,
+        // over every day of that (fully elapsed) month.
         const prevRoutine = routineForDate(prev.from, sch, vs, exs).filter((e) => e.active);
-        setPrevAvg(prevDays.length ? prevDays.reduce((a, d) => a + dayCompletion(prevRoutine, d), 0) / prevDays.length : null);
+        const prevMonthDays = Number(prev.to.slice(8));
+        setPrevAvg(prevDays.length ? prevDays.reduce((a, d) => a + dayCompletion(prevRoutine, d), 0) / prevMonthDays : null);
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, [month]);
@@ -62,15 +64,21 @@ export function Stats() {
   }, [days]);
 
   const logged = days ?? [];
-  const avg = logged.length ? logged.reduce((a, d) => a + dayCompletion(exercises, d), 0) / logged.length : 0;
+  // Average completion is taken over every day in the month (days elapsed for
+  // the current month), counting untracked days as 0% — the same way a missed
+  // exercise counts as 0% within a day. So skipping days lowers the average
+  // rather than being ignored.
+  const isCurrentMonth = month === todayISO().slice(0, 7);
+  const lastDay = new Date(year, mon, 0).getDate();
+  const monthDays = isCurrentMonth ? Number(todayISO().slice(8)) : lastDay;
+  const totalCompletion = logged.reduce((a, d) => a + dayCompletion(exercises, d), 0);
+  const avg = monthDays > 0 ? totalCompletion / monthDays : 0;
   const daysAbove0 = logged.filter((d) => dayCompletion(exercises, d) > 0).length;
   const daysAbove50 = logged.filter((d) => dayCompletion(exercises, d) > 0.5).length;
   const avgDelta = prevAvg === null ? null : avg - prevAvg;
   const muscles = useMemo(() => muscleBreakdown(exercises, logged), [exercises, logged]);
 
   // Trend path across the calendar month.
-  const isCurrentMonth = month === todayISO().slice(0, 7);
-  const lastDay = new Date(year, mon, 0).getDate();
   const endDay = isCurrentMonth ? Number(todayISO().slice(8)) : lastDay;
   const points = useMemo(() => {
     const pts: number[] = [];
