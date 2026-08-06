@@ -166,6 +166,14 @@ export function WorkoutClock({
 
   const total = Math.max(session.totalMs, 1);
   const trainPct = (session.trainingMs / total) * 100;
+  const runningWorkout = session.training || session.resting;
+  const workoutState = paused
+    ? "Workout stopped"
+    : session.training
+      ? "Workout · in a set"
+      : session.resting
+        ? "Workout · resting"
+        : "Workout time";
 
   return (
     <div className="card clock">
@@ -199,11 +207,11 @@ export function WorkoutClock({
         <div className="clock-actions">
           {running ? (
             <button className="clock-btn" onClick={pauseSet} aria-label="Pause set timer">
-              <span className="clock-ic" aria-hidden="true">❙❙</span>Pause
+              <span className="clock-ic" aria-hidden="true">❙❙</span>Pause set
             </button>
           ) : (
             <button className="clock-btn primary" onClick={startSet} disabled={allDone} aria-label="Start set timer">
-              <span className="clock-ic" aria-hidden="true">▶</span>{setElapsedMs > 0 ? "Resume" : "Start"}
+              <span className="clock-ic" aria-hidden="true">▶</span>{setElapsedMs > 0 ? "Resume set" : "Start set"}
             </button>
           )}
         </div>
@@ -236,16 +244,12 @@ export function WorkoutClock({
       <div className="clock-summary">
         <div className="clock-sum-top">
           <div>
-            <span className="clock-lab">{paused ? "Workout paused" : "Workout time"}</span>
+            <span className="clock-lab">{workoutState}</span>
             <div className="clock-total-big num">{formatDuration(session.totalMs)}</div>
           </div>
-          {paused ? (
-            <button className="clock-btn primary" onClick={startWorkout}>
-              <span className="clock-ic" aria-hidden="true">▶</span>Resume
-            </button>
-          ) : session.started ? (
+          {runningWorkout ? (
             <button className="clock-btn" onClick={pauseWorkout}>
-              <span className="clock-ic" aria-hidden="true">❙❙</span>Pause workout
+              <span className="clock-ic" aria-hidden="true">■</span>Stop workout
             </button>
           ) : (
             <button className="clock-btn primary" onClick={startWorkout}>
@@ -257,7 +261,7 @@ export function WorkoutClock({
           <span className="fill train" style={{ width: `${trainPct}%` }} />
         </div>
         <div className="clock-bar-legend">
-          <span className="lg"><i className="dot train" />Training <b className="num">{formatDuration(session.trainingMs)}</b></span>
+          <span className="lg"><i className="dot train" />Work <b className="num">{formatDuration(session.trainingMs)}</b></span>
           <span className="lg"><i className="dot rest" />Rest <b className="num">{formatDuration(session.restMs)}</b></span>
         </div>
         <div style={{ textAlign: "center", marginTop: 4 }}>
@@ -270,7 +274,7 @@ export function WorkoutClock({
       {confirmReset && (
         <ConfirmDialog
           title="Reset timers?"
-          message="This clears the workout Total, Training and Rest times and the current set stopwatch for today. Your logged sets are not affected."
+          message="This clears the workout Total, Work and Rest times and the current set stopwatch for today. Your logged sets are not affected."
           confirmLabel="Reset"
           danger
           onConfirm={doReset}
