@@ -92,11 +92,13 @@ export const workoutClock = {
     set(date, { ...s, phase: "paused", segStart: null });
   },
 
-  // Resume a paused workout back into the resting phase.
-  resumeWorkout(date: string) {
+  // Start the overall workout (from idle) or resume it (from paused) into the
+  // resting phase. No-op while a set is already being timed.
+  startWorkout(date: string) {
     const s = load(date);
-    if (s.phase !== "paused") return;
-    set(date, { ...s, phase: "resting", segStart: Date.now() });
+    if (s.phase === "training") return;
+    const now = Date.now();
+    set(date, { ...fold(s, now), phase: "resting", segStart: now });
   },
 
   reset(date: string) {

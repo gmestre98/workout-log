@@ -103,7 +103,7 @@ export function WorkoutClock({
     workoutClock.pauseWorkout(date);
   };
 
-  const resumeWorkout = () => workoutClock.resumeWorkout(date);
+  const startWorkout = () => workoutClock.startWorkout(date);
 
   const log = logFor(selected);
   const doneCount = log.sets.filter((s) => s.completed).length;
@@ -202,7 +202,7 @@ export function WorkoutClock({
               <span className="clock-ic" aria-hidden="true">❙❙</span>Pause
             </button>
           ) : (
-            <button className="clock-btn primary" onClick={startSet} disabled={allDone || paused} aria-label="Start set timer">
+            <button className="clock-btn primary" onClick={startSet} disabled={allDone} aria-label="Start set timer">
               <span className="clock-ic" aria-hidden="true">▶</span>{setElapsedMs > 0 ? "Resume" : "Start"}
             </button>
           )}
@@ -239,16 +239,18 @@ export function WorkoutClock({
             <span className="clock-lab">{paused ? "Workout paused" : "Workout time"}</span>
             <div className="clock-total-big num">{formatDuration(session.totalMs)}</div>
           </div>
-          {session.started && (
-            paused ? (
-              <button className="clock-btn primary" onClick={resumeWorkout}>
-                <span className="clock-ic" aria-hidden="true">▶</span>Resume
-              </button>
-            ) : (
-              <button className="clock-btn" onClick={pauseWorkout}>
-                <span className="clock-ic" aria-hidden="true">❙❙</span>Pause workout
-              </button>
-            )
+          {paused ? (
+            <button className="clock-btn primary" onClick={startWorkout}>
+              <span className="clock-ic" aria-hidden="true">▶</span>Resume
+            </button>
+          ) : session.started ? (
+            <button className="clock-btn" onClick={pauseWorkout}>
+              <span className="clock-ic" aria-hidden="true">❙❙</span>Pause workout
+            </button>
+          ) : (
+            <button className="clock-btn primary" onClick={startWorkout}>
+              <span className="clock-ic" aria-hidden="true">▶</span>Start workout
+            </button>
           )}
         </div>
         <div className={`clock-bar ${paused ? "paused" : ""}`}>
