@@ -53,6 +53,7 @@ export function Routine() {
   const [copyFor, setCopyFor] = useState<RoutineVersion | null>(null);
   const [renameFor, setRenameFor] = useState<RoutineVersion | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [editAssign, setEditAssign] = useState<VersionAssignment | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -162,6 +163,21 @@ export function Routine() {
     } catch (e: any) { setError(String(e.message ?? e)); }
   };
 
+  // Update an existing schedule entry. If the start date moved, the old entry
+  // (keyed by its date) is removed and the new one created; otherwise the
+  // version is simply reassigned for that date.
+  const doEditAssign = async (prev: VersionAssignment, startDate: string, versionId: string) => {
+    setBusy(true);
+    try {
+      if (startDate !== prev.startDate) await api.deleteAssignment(prev.startDate);
+      await api.setAssignment(startDate, versionId);
+      setEditAssign(null);
+      toast("Schedule updated");
+      load();
+    } catch (e: any) { setError(String(e.message ?? e)); }
+    finally { setBusy(false); }
+  };
+
   const orderedSlots = useMemo(() => {
     const seen: string[] = [];
     for (const e of exercises) if (!seen.includes(e.timeSlot)) seen.push(e.timeSlot);
@@ -261,6 +277,7 @@ export function Routine() {
       <ScheduleList
         schedule={schedule}
         versions={versions}
+        onEdit={setEditAssign}
         onUnassign={doUnassign}
       />
 
@@ -304,8 +321,17 @@ export function Routine() {
         <AssignVersionDialog
           versions={versions}
           busy={busy}
-          onAssign={doAssign}
+          onSave={doAssign}
           onCancel={() => setAssignOpen(false)}
+        />
+      )}
+      {editAssign && (
+        <AssignVersionDialog
+          versions={versions}
+          busy={busy}
+          initial={editAssign}
+          onSave={(sd, vid) => doEditAssign(editAssign, sd, vid)}
+          onCancel={() => setEditAssign(null)}
         />
       )}
       {renameFor && (
@@ -348,10 +374,11 @@ function RenameVersionDialog({
 }
 
 function ScheduleList({
-  schedule, versions, onUnassign,
+  schedule, versions, onEdit, onUnassign,
 }: {
   schedule: VersionAssignment[];
   versions: RoutineVersion[];
+  onEdit: (a: VersionAssignment) => void;
   onUnassign: (startDate: string) => void;
 }) {
   const byId = useMemo(() => new Map(versions.map((v) => [v.id, v])), [versions]);
@@ -359,7 +386,7 @@ function ScheduleList({
     return (
       <div className="card" style={{ padding: 15 }}>
         <p className="tiny muted" style={{ textAlign: "center", padding: "8px 0" }}>
-          No schedule yet. Assign a version a start date (usually the 1st of a month) to record which routine you followed when. This is a label only — it doesn't change your daily tracking.
+          No schedule yet. Assign a version a start date (usually the 1st of a month) — it becomes the routine used for tracking every day from then until the next scheduled version.
         </p>
       </div>
     );
@@ -380,6 +407,7 @@ function ScheduleList({
                 {v ? ` · ${v.exercises.length} exercises` : ""}
               </div>
             </div>
+            <button className="link" onClick={() => onEdit(a)}>Edit</button>
             <button className="link danger" onClick={() => onUnassign(a.startDate)}>Remove</button>
           </div>
         );
@@ -389,18 +417,20 @@ function ScheduleList({
 }
 
 function AssignVersionDialog({
-  versions, busy, onAssign, onCancel,
+  versions, busy, initial, onSave, onCancel,
 }: {
   versions: RoutineVersion[];
   busy: boolean;
-  onAssign: (startDate: string, versionId: string) => void;
+  initial?: VersionAssignment;
+  onSave: (startDate: string, versionId: string) => void;
   onCancel: () => void;
 }) {
-  const [startDate, setStartDate] = useState(firstOfMonth(todayISO()));
-  const [versionId, setVersionId] = useState(versions[0]?.id ?? "");
+  const editing = !!initial;
+  const [startDate, setStartDate] = useState(initial?.startDate ?? firstOfMonth(todayISO()));
+  const [versionId, setVersionId] = useState(initial?.versionId ?? versions[0]?.id ?? "");
   return (
-    <Modal title="Schedule a version" onClose={busy ? undefined : onCancel}>
-      <p className="modal-msg">Record which version was in effect from a given date. It stays in effect until the next scheduled date. Pick the 1st of a month for a monthly plan, or any day for a mid-month change.</p>
+    <Modal title={editing ? "Edit schedule entry" : "Schedule a version"} onClose={busy ? undefined : onCancel}>
+      <p className="modal-msg">Sets which version is in effect from a given date — the routine used for tracking every day from then until the next scheduled version. Pick the 1st of a month for a monthly plan, or any day for a mid-month change. Move the date earlier to cover more history.</p>
       <div className="form" style={{ gap: 14 }}>
         <label>In effect from
           <input type="date" value={startDate} onChange={(e) => e.target.value && setStartDate(e.target.value)} />
@@ -415,8 +445,8 @@ function AssignVersionDialog({
       </div>
       <div className="modal-btns">
         <button className="btn ghost" onClick={onCancel} disabled={busy}>Cancel</button>
-        <button className="btn primary" onClick={() => versionId && onAssign(startDate, versionId)} disabled={busy || !versionId}>
-          {busy ? "Saving…" : "Schedule"}
+        <button className="btn primary" onClick={() => versionId && onSave(startDate, versionId)} disabled={busy || !versionId}>
+          {busy ? "Saving…" : editing ? "Save" : "Schedule"}
         </button>
       </div>
     </Modal>
