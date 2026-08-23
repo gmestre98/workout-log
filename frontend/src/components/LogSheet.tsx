@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Exercise, ExerciseLog } from "../types";
 import { exerciseCompletion, formatPercent, setAllSets, setMeta, unitLabel } from "../format";
 import { workoutClock } from "../timer";
+import { playRestDone } from "../sound";
 import { IconCheck, IconTimer } from "./icons";
 
 export function LogSheet({
@@ -31,6 +32,7 @@ export function LogSheet({
   useEffect(() => {
     if (restLeft === null) return;
     if (restLeft <= 0) {
+      playRestDone(); // rest countdown reached zero on its own (not skipped)
       setRestLeft(null);
       return;
     }

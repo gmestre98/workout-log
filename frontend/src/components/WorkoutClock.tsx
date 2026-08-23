@@ -3,6 +3,7 @@ import type { Exercise, ExerciseLog } from "../types";
 import { useWorkoutClock, workoutClock } from "../timer";
 import { exerciseCompletion, formatDuration, setMeta, unitLabel } from "../format";
 import { toast } from "../toast";
+import { playRestDone, playSetDone } from "../sound";
 import { ConfirmDialog } from "./Modal";
 import { IconTimer } from "./icons";
 
@@ -35,6 +36,8 @@ export function WorkoutClock({
   const startRef = useRef<number | null>(null);
   const accumRef = useRef(0);
   const [, tick] = useState(0);
+  // Guards the "timed set reached its target" chime so it sounds once per set.
+  const setDoneBeepedRef = useRef(false);
 
   // Editable reps for rep-based exercises; null means "use planned".
   const [reps, setReps] = useState<number | null>(null);
@@ -52,19 +55,32 @@ export function WorkoutClock({
     startRef.current = null;
     setRunning(false);
     setReps(null);
+    setDoneBeepedRef.current = false;
   }, [selectedKey]);
 
-  // Tick the set stopwatch display while it runs.
+  // Tick the set stopwatch display while it runs, and chime once when a timed
+  // set first reaches its target duration.
   useEffect(() => {
     if (!running) return;
-    const t = setInterval(() => tick((n) => n + 1), 250);
+    const t = setInterval(() => {
+      tick((n) => n + 1);
+      const u = selected?.unit;
+      if (!selected || u === "reps" || setDoneBeepedRef.current) return;
+      const target = selected.plannedAmount * (u === "minutes" ? 60000 : 1000);
+      const elapsed = accumRef.current + (startRef.current !== null ? Date.now() - startRef.current : 0);
+      if (target > 0 && elapsed >= target) {
+        setDoneBeepedRef.current = true;
+        playSetDone();
+      }
+    }, 250);
     return () => clearInterval(t);
-  }, [running]);
+  }, [running, selected]);
 
   // Between-set countdown.
   useEffect(() => {
     if (restLeft === null) return;
     if (restLeft <= 0) {
+      playRestDone(); // rest countdown reached zero on its own (not skipped)
       setRestLeft(null);
       return;
     }
@@ -133,6 +149,7 @@ export function WorkoutClock({
     startRef.current = null;
     setRunning(false);
     setReps(null);
+    setDoneBeepedRef.current = false;
     workoutClock.stopTraining(date);
 
     const willBeDone = doneCount + 1 >= totalSets;
@@ -151,6 +168,7 @@ export function WorkoutClock({
     startRef.current = null;
     setRunning(false);
     setReps(null);
+    setDoneBeepedRef.current = false;
     setConfirmReset(false);
   };
 
