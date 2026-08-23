@@ -412,3 +412,12 @@ input, select { font-family: inherit; color: inherit; }
 .sched-tag { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); margin: -2px 4px 12px; }
 .sched-tag b { color: var(--ink); font-weight: 720; }
 .sched-tag .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--night); box-shadow: 0 0 0 3px color-mix(in srgb, var(--night) 20%, transparent); }
+
+/* Shown atop the Routine screen while offline: routine edits can't be queued,
+   so the controls are disabled and this explains why. */
+.offline-banner { display: flex; align-items: flex-start; gap: 10px; background: color-mix(in srgb, var(--danger) 9%, var(--surface)); border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--line)); border-radius: 14px; padding: 12px 14px; margin: 2px 0 14px; }
+.offline-banner .dot { flex: none; width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 20%, transparent); }
+.offline-banner .ob-title { font-size: 14px; font-weight: 720; color: var(--ink); }
+.offline-banner .ob-msg { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; }
+.link:disabled { opacity: .4; cursor: not-allowed; }
+.btn:disabled, .iconbtn:disabled, .version-title:disabled { opacity: .5; cursor: not-allowed; }

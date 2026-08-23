@@ -4,6 +4,7 @@ import type { Exercise, RoutineVersion, VersionAssignment, Unit, VersionStatus }
 import { DEFAULT_TIME_SLOTS, UNITS } from "../types";
 import { firstOfMonth, primaryMuscle, slotColor, todayISO } from "../format";
 import { toast } from "../toast";
+import { useOnline } from "../useOnline";
 import { ConfirmDialog, Modal } from "./Modal";
 import { IconPlus } from "./icons";
 
@@ -38,6 +39,11 @@ const STATUS_META: Record<VersionStatus, { label: string; cls: string }> = {
 };
 
 export function Routine() {
+  // Routine edits hit the server directly and can't be queued like day logs, so
+  // while offline the whole editor is disabled to avoid making a change that
+  // would be silently lost. `offline` gates every mutating control below.
+  const online = useOnline();
+  const offline = !online;
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [versions, setVersions] = useState<RoutineVersion[]>([]);
   const [schedule, setSchedule] = useState<VersionAssignment[]>([]);
@@ -65,7 +71,7 @@ export function Routine() {
   useEffect(load, []);
 
   const save = async () => {
-    if (!draft) return;
+    if (!draft || offline) return;
     try {
       if (draft.id) await api.updateExercise(draft as Exercise);
       else await api.createExercise(draft);
@@ -75,11 +81,13 @@ export function Routine() {
   };
 
   const remove = async (ex: Exercise) => {
+    if (offline) return;
     try { await api.deleteExercise(ex.id); load(); }
     catch (e: any) { setError(String(e.message ?? e)); }
   };
 
   const doSaveVersion = async (note: string, status: VersionStatus) => {
+    if (offline) return;
     setBusy(true);
     try {
       await api.saveVersion(note, status);
@@ -91,6 +99,7 @@ export function Routine() {
   };
 
   const doActivate = async (v: RoutineVersion) => {
+    if (offline) return;
     setBusy(true);
     try {
       await api.activateVersion(v.id);
@@ -102,6 +111,7 @@ export function Routine() {
   };
 
   const doDeleteVersion = async (v: RoutineVersion) => {
+    if (offline) return;
     setBusy(true);
     try {
       await api.deleteVersion(v.id);
@@ -113,6 +123,7 @@ export function Routine() {
   };
 
   const relabel = async (v: RoutineVersion, status: "future" | "past") => {
+    if (offline) return;
     try {
       await api.setVersionStatus(v.id, status);
       toast(status === "future" ? "Moved to future plans" : "Archived to past");
@@ -123,6 +134,7 @@ export function Routine() {
   // Load a copy of a version into the live routine so the user can tweak a few
   // exercises and save it as a new version — no re-entering everything.
   const doEditCopy = async (v: RoutineVersion) => {
+    if (offline) return;
     setBusy(true);
     try {
       await api.loadVersion(v.id);
@@ -134,6 +146,7 @@ export function Routine() {
   };
 
   const doRename = async (v: RoutineVersion, note: string) => {
+    if (offline) return;
     setBusy(true);
     try {
       await api.renameVersion(v.id, note);
@@ -145,6 +158,7 @@ export function Routine() {
   };
 
   const doAssign = async (startDate: string, versionId: string) => {
+    if (offline) return;
     setBusy(true);
     try {
       await api.setAssignment(startDate, versionId);
@@ -156,6 +170,7 @@ export function Routine() {
   };
 
   const doUnassign = async (startDate: string) => {
+    if (offline) return;
     try {
       await api.deleteAssignment(startDate);
       toast("Removed from schedule");
@@ -167,6 +182,7 @@ export function Routine() {
   // (keyed by its date) is removed and the new one created; otherwise the
   // version is simply reassigned for that date.
   const doEditAssign = async (prev: VersionAssignment, startDate: string, versionId: string) => {
+    if (offline) return;
     setBusy(true);
     try {
       if (startDate !== prev.startDate) await api.deleteAssignment(prev.startDate);
@@ -202,6 +218,7 @@ export function Routine() {
         onCancel={() => setDraft(null)}
         onDelete={draft.id ? async () => { await remove(draft as Exercise); setDraft(null); } : undefined}
         error={error}
+        offline={offline}
       />
     );
   }
@@ -213,8 +230,18 @@ export function Routine() {
           <div className="subt">{exercises.filter((e) => e.active).length} active</div>
           <div className="title">Routine</div>
         </div>
-        <button className="iconbtn primary" onClick={() => setDraft(blank(exercises.length))} aria-label="Add exercise"><IconPlus /></button>
+        <button className="iconbtn primary" onClick={() => setDraft(blank(exercises.length))} aria-label="Add exercise" disabled={offline}><IconPlus /></button>
       </div>
+
+      {offline && (
+        <div className="offline-banner" role="status">
+          <span className="dot" />
+          <div>
+            <div className="ob-title">You're offline</div>
+            <div className="ob-msg">Editing your routine is paused until you're back online, so no change gets lost. Daily logging still works offline.</div>
+          </div>
+        </div>
+      )}
 
       {error && <p className="error">{error}</p>}
       {loading && <p className="empty">Loading…</p>}
@@ -239,7 +266,7 @@ export function Routine() {
                   <div className="m">{ex.plannedSets} × {ex.plannedAmount} {ex.unit === "reps" ? "" : ex.unit === "seconds" ? "s" : "min"}{ex.perSide ? " · per side" : ""}{ex.restSeconds > 0 ? ` · ${ex.restSeconds}s rest` : ""}{ex.note ? ` · ${ex.note}` : ""}</div>
                 </div>
                 {ex.muscleGroup && <span className="pillbadge">{primaryMuscle(ex.muscleGroup)}</span>}
-                <button className="link" onClick={() => setDraft({ ...ex })}>Edit</button>
+                <button className="link" onClick={() => setDraft({ ...ex })} disabled={offline}>Edit</button>
               </div>
             ))}
           </div>
@@ -248,7 +275,7 @@ export function Routine() {
 
       <div className="slot-head" style={{ marginTop: 22 }}>
         <span className="slot-title">Workout versions</span>
-        <button className="link" onClick={() => setSaveOpen(true)}>Save version</button>
+        <button className="link" onClick={() => setSaveOpen(true)} disabled={offline}>Save version</button>
       </div>
       {versions.length === 0 ? (
         <div className="card" style={{ padding: 15 }}>
@@ -261,6 +288,7 @@ export function Routine() {
           <VersionCard
             key={v.id}
             version={v}
+            disabled={offline}
             onActivate={() => setActivateFor(v)}
             onEditCopy={() => setCopyFor(v)}
             onRename={() => setRenameFor(v)}
@@ -272,11 +300,12 @@ export function Routine() {
 
       <div className="slot-head" style={{ marginTop: 22 }}>
         <span className="slot-title">Schedule</span>
-        {versions.length > 0 && <button className="link" onClick={() => setAssignOpen(true)}>Assign</button>}
+        {versions.length > 0 && <button className="link" onClick={() => setAssignOpen(true)} disabled={offline}>Assign</button>}
       </div>
       <ScheduleList
         schedule={schedule}
         versions={versions}
+        disabled={offline}
         onEdit={setEditAssign}
         onUnassign={doUnassign}
       />
@@ -374,10 +403,11 @@ function RenameVersionDialog({
 }
 
 function ScheduleList({
-  schedule, versions, onEdit, onUnassign,
+  schedule, versions, disabled, onEdit, onUnassign,
 }: {
   schedule: VersionAssignment[];
   versions: RoutineVersion[];
+  disabled?: boolean;
   onEdit: (a: VersionAssignment) => void;
   onUnassign: (startDate: string) => void;
 }) {
@@ -407,8 +437,8 @@ function ScheduleList({
                 {v ? ` · ${v.exercises.length} exercises` : ""}
               </div>
             </div>
-            <button className="link" onClick={() => onEdit(a)}>Edit</button>
-            <button className="link danger" onClick={() => onUnassign(a.startDate)}>Remove</button>
+            <button className="link" onClick={() => onEdit(a)} disabled={disabled}>Edit</button>
+            <button className="link danger" onClick={() => onUnassign(a.startDate)} disabled={disabled}>Remove</button>
           </div>
         );
       })}
@@ -454,9 +484,10 @@ function AssignVersionDialog({
 }
 
 function VersionCard({
-  version, onActivate, onEditCopy, onRename, onRelabel, onDelete,
+  version, disabled, onActivate, onEditCopy, onRename, onRelabel, onDelete,
 }: {
   version: RoutineVersion;
+  disabled?: boolean;
   onActivate: () => void;
   onEditCopy: () => void;
   onRename: () => void;
@@ -468,7 +499,7 @@ function VersionCard({
   return (
     <div className={`card version ${isCurrent ? "is-current" : ""}`}>
       <div className="version-top">
-        <button className="version-title" onClick={onRename} aria-label="Rename version">
+        <button className="version-title" onClick={onRename} aria-label="Rename version" disabled={disabled}>
           <div className="version-name">{versionName(version)}</div>
           <div className="tiny muted">
             {version.exercises.length} exercises{version.note?.trim() ? ` · saved ${fmtDate(version.createdAt)}` : ""}
@@ -481,19 +512,19 @@ function VersionCard({
           {isCurrent ? (
             <span className="tiny muted">Currently in use</span>
           ) : (
-            <button className="link" onClick={onActivate}>Set as current</button>
+            <button className="link" onClick={onActivate} disabled={disabled}>Set as current</button>
           )}
-          <button className="link" onClick={onEditCopy}>Edit a copy</button>
-          <button className="link" onClick={onRename}>Rename</button>
+          <button className="link" onClick={onEditCopy} disabled={disabled}>Edit a copy</button>
+          <button className="link" onClick={onRename} disabled={disabled}>Rename</button>
         </div>
         <div className="version-actions-r">
           {version.status !== "future" && !isCurrent && (
-            <button className="link" onClick={() => onRelabel("future")}>Future</button>
+            <button className="link" onClick={() => onRelabel("future")} disabled={disabled}>Future</button>
           )}
           {version.status !== "past" && !isCurrent && (
-            <button className="link" onClick={() => onRelabel("past")}>Archive</button>
+            <button className="link" onClick={() => onRelabel("past")} disabled={disabled}>Archive</button>
           )}
-          <button className="link danger" onClick={onDelete}>Delete</button>
+          <button className="link danger" onClick={onDelete} disabled={disabled}>Delete</button>
         </div>
       </div>
     </div>
@@ -544,8 +575,8 @@ function SaveVersionDialog({
 }
 
 function ExerciseForm({
-  draft, setDraft, knownSlots, onSave, onCancel, onDelete, error,
-}: { draft: Draft; setDraft: (d: Draft) => void; knownSlots: string[]; onSave: () => void; onCancel: () => void; onDelete?: () => void; error: string }) {
+  draft, setDraft, knownSlots, onSave, onCancel, onDelete, error, offline,
+}: { draft: Draft; setDraft: (d: Draft) => void; knownSlots: string[]; onSave: () => void; onCancel: () => void; onDelete?: () => void; error: string; offline?: boolean }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft({ ...draft, [key]: value });
   // Show every known slot as a chip, plus the current value if it's brand new.
@@ -558,6 +589,15 @@ function ExerciseForm({
         <div><div className="subt">{draft.id ? "Edit" : "New"}</div><div className="title">{draft.id ? "Edit exercise" : "New exercise"}</div></div>
         <button className="iconbtn" onClick={onCancel} aria-label="Close">✕</button>
       </div>
+      {offline && (
+        <div className="offline-banner" role="status">
+          <span className="dot" />
+          <div>
+            <div className="ob-title">You're offline</div>
+            <div className="ob-msg">Reconnect to save this exercise — routine changes can't be saved offline.</div>
+          </div>
+        </div>
+      )}
       {error && <p className="error">{error}</p>}
       <form className="form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
         <label>Name<input value={draft.name} onChange={(e) => set("name", e.target.value)} required /></label>
@@ -589,9 +629,9 @@ function ExerciseForm({
         <label className="check"><input type="checkbox" checked={draft.active} onChange={(e) => set("active", e.target.checked)} />Active (shown in daily tracking)</label>
         <div className="formbtns">
           <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>
-          <button type="submit" className="btn primary">Save</button>
+          <button type="submit" className="btn primary" disabled={offline}>Save</button>
         </div>
-        {onDelete && <button type="button" className="btn danger block" style={{ marginTop: 4 }} onClick={() => setConfirmDelete(true)}>Delete exercise</button>}
+        {onDelete && <button type="button" className="btn danger block" style={{ marginTop: 4 }} onClick={() => setConfirmDelete(true)} disabled={offline}>Delete exercise</button>}
       </form>
       <div className="scroll-pad" />
       {confirmDelete && onDelete && (

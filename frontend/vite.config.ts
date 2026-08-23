@@ -16,6 +16,24 @@ export default defineConfig({
         // routes: /auth/* (Google OAuth redirects) and /api/* must hit the
         // network, otherwise clicking "Sign in" just re-serves index.html.
         navigateFallbackDenylist: [/^\/auth\//, /^\/api\//],
+        // Cache GET reads from the API so the app renders offline from the last
+        // seen data (routine, history, streak). NetworkFirst keeps it fresh
+        // when online and falls back to cache when offline. Writes (PUT/POST/
+        // DELETE) are never cached — offline writes go through the day-log
+        // outbox in dayStore.ts, which replays them on reconnect.
+        runtimeCaching: [
+          {
+            urlPattern: ({ url, request }) =>
+              url.pathname.startsWith("/api/") && request.method === "GET",
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "api-cache",
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 90 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+        ],
       },
       manifest: {
         name: "Workout Log",

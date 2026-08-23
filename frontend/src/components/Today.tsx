@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
+import { getDay, saveDay, subscribeSync, getSyncState, type SyncState } from "../dayStore";
 import type { DayLog, Exercise, ExerciseLog, RoutineVersion, VersionAssignment } from "../types";
 import {
   addDaysISO, computeStreak, dayCompletion, dayHeader, effectiveVersionId, exerciseCompletion,
@@ -16,6 +17,15 @@ const today = todayISO();
 const dayHasActivity = (d: DayLog) =>
   Object.values(d.exercises).some((l) => l.sets.some((s) => s.completed));
 
+// The status word under the day's completion percentage. It doubles as the
+// offline-sync indicator: a queued edit reads "Will sync" until it reaches the
+// server, so the user knows their offline logging is safe and pending.
+function syncLabel(saving: boolean, sync: SyncState): string {
+  if (sync.pending > 0 && !sync.online) return "Will sync";
+  if (saving || sync.syncing) return "Saving…";
+  return "Complete";
+}
+
 export function Today({ email }: { email: string }) {
   const [date, setDate] = useState(today);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -28,7 +38,14 @@ export function Today({ email }: { email: string }) {
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [sync, setSync] = useState(getSyncState());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reflect the offline sync queue in the status line.
+  useEffect(() => subscribeSync(setSync), []);
+  useEffect(() => {
+    if (!sync.syncing && sync.pending === 0) setSaving(false);
+  }, [sync.syncing, sync.pending]);
 
   // Streak history (once).
   useEffect(() => {
@@ -53,7 +70,7 @@ export function Today({ email }: { email: string }) {
     let cancelled = false;
     setDay(null);
     setError("");
-    Promise.all([api.listExercises(), api.getDay(date)])
+    Promise.all([api.listExercises(), getDay(date)])
       .then(([exs, d]) => {
         if (cancelled) return;
         setLiveExercises(exs);
@@ -75,18 +92,17 @@ export function Today({ email }: { email: string }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setSaving(true);
     saveTimer.current = setTimeout(() => {
-      api.saveDay(next)
-        .then(() => {
-          if (next.date === today) {
-            setActiveDates((prev) => {
-              const s = new Set(prev);
-              if (dayHasActivity(next)) s.add(today); else s.delete(today);
-              return s;
-            });
-          }
-        })
-        .catch((e) => setError(String(e.message ?? e)))
-        .finally(() => setSaving(false));
+      // Local-first: the day is persisted to storage synchronously and pushed
+      // to the server in the background, so an offline edit is never lost. The
+      // streak dots can update immediately off the just-saved state.
+      saveDay(next);
+      if (next.date === today) {
+        setActiveDates((prev) => {
+          const s = new Set(prev);
+          if (dayHasActivity(next)) s.add(today); else s.delete(today);
+          return s;
+        });
+      }
     }, 600);
   }, []);
 
@@ -184,7 +200,7 @@ export function Today({ email }: { email: string }) {
             {streak > 0 && <div className="streakpill"><span>🔥</span><span className="num">{streak}</span>-day streak</div>}
             <div style={{ display: "flex", gap: 18 }}>
               <div className="kv"><span className="n num">{doneCount}/{exercises.length}</span><span className="l">Exercises</span></div>
-              <div className="kv"><span className="n num">{formatPercent(dayAvg)}</span><span className="l">{saving ? "Saving…" : "Complete"}</span></div>
+              <div className="kv"><span className="n num">{formatPercent(dayAvg)}</span><span className="l">{syncLabel(saving, sync)}</span></div>
             </div>
           </div>
         </div>
