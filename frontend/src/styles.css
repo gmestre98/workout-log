@@ -3,22 +3,23 @@
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Menlo", "Roboto Mono", monospace;
 
   /* light — warm concrete / chalk */
-  --bg: #eae7e1;
-  --surface: #faf9f6;
-  --surface-2: #efece6;
-  --ink: #1a1512;
-  --ink-2: #6b6157;
-  --ink-3: #9a9084;
-  --line: #ddd8cf;
-  --ember: #ec5a24;
+  --bg: #e9e5de;
+  --surface: #ffffff;
+  --surface-2: #f2eee7;
+  --inset: #efeae2;
+  --ink: #191410;
+  --ink-2: #5f554b;
+  --ink-3: #8a8072;
+  --line: #e2dccf;
+  --ember: #df5220;
   --ember-2: #f5852f;
-  --done: #1f9d61;
+  --done: #1a935a;
   --dawn: #e0973a;
   --morning: #e2732e;
-  --noon: #ec5a24;
+  --noon: #df5220;
   --dusk: #b5486a;
   --night: #6d5bbf;
-  --track: #ddd8cf;
+  --track: #e2dccf;
   --danger: #d1442b;
   --shadow: 0 10px 34px rgba(60, 40, 24, 0.12);
   --shadow-sm: 0 2px 12px rgba(60, 40, 24, 0.07);
@@ -26,39 +27,40 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #15110e;
-    --surface: #211b16;
-    --surface-2: #2c241d;
-    --ink: #f4eee7;
-    --ink-2: #ab9f92;
-    --ink-3: #756a5e;
-    --line: #322922;
-    --ember: #ff6a3d;
-    --ember-2: #ff9245;
-    --done: #43c68c;
+    --bg: #100c0a;
+    --surface: #241d17;
+    --surface-2: #332a22;
+    --inset: #191410;
+    --ink: #f7f2eb;
+    --ink-2: #bfb1a1;
+    --ink-3: #928475;
+    --line: #3b3129;
+    --ember: #ff6f43;
+    --ember-2: #ff9556;
+    --done: #4bd094;
     --dawn: #e9a94e;
     --morning: #f0813e;
-    --noon: #ff6a3d;
+    --noon: #ff6f43;
     --dusk: #d16a90;
     --night: #8878e6;
-    --track: #322922;
+    --track: #2a221b;
     --danger: #f97066;
     --shadow: 0 12px 38px rgba(0, 0, 0, 0.55);
     --shadow-sm: 0 2px 14px rgba(0, 0, 0, 0.45);
   }
 }
 :root[data-theme="dark"] {
-  --bg: #15110e; --surface: #211b16; --surface-2: #2c241d; --ink: #f4eee7;
-  --ink-2: #ab9f92; --ink-3: #756a5e; --line: #322922; --ember: #ff6a3d;
-  --ember-2: #ff9245; --done: #43c68c; --dawn: #e9a94e; --morning: #f0813e;
-  --noon: #ff6a3d; --dusk: #d16a90; --night: #8878e6; --track: #322922; --danger: #f97066;
+  --bg: #100c0a; --surface: #241d17; --surface-2: #332a22; --inset: #191410; --ink: #f7f2eb;
+  --ink-2: #bfb1a1; --ink-3: #928475; --line: #3b3129; --ember: #ff6f43;
+  --ember-2: #ff9556; --done: #4bd094; --dawn: #e9a94e; --morning: #f0813e;
+  --noon: #ff6f43; --dusk: #d16a90; --night: #8878e6; --track: #2a221b; --danger: #f97066;
   --shadow: 0 12px 38px rgba(0,0,0,.55); --shadow-sm: 0 2px 14px rgba(0,0,0,.45);
 }
 :root[data-theme="light"] {
-  --bg: #eae7e1; --surface: #faf9f6; --surface-2: #efece6; --ink: #1a1512;
-  --ink-2: #6b6157; --ink-3: #9a9084; --line: #ddd8cf; --ember: #ec5a24;
-  --ember-2: #f5852f; --done: #1f9d61; --dawn: #e0973a; --morning: #e2732e;
-  --noon: #ec5a24; --dusk: #b5486a; --night: #6d5bbf; --track: #ddd8cf; --danger: #d1442b;
+  --bg: #e9e5de; --surface: #ffffff; --surface-2: #f2eee7; --inset: #efeae2; --ink: #191410;
+  --ink-2: #5f554b; --ink-3: #8a8072; --line: #e2dccf; --ember: #df5220;
+  --ember-2: #f5852f; --done: #1a935a; --dawn: #e0973a; --morning: #e2732e;
+  --noon: #df5220; --dusk: #b5486a; --night: #6d5bbf; --track: #e2dccf; --danger: #d1442b;
   --shadow: 0 10px 34px rgba(60,40,24,.12); --shadow-sm: 0 2px 12px rgba(60,40,24,.07);
 }
 
@@ -169,7 +171,7 @@ input, select { font-family: inherit; }
 .ex-meta { font-size: 12px; color: var(--ink-2); margin-top: 2px; font-family: var(--mono); }
 .ex-pct { font-size: 15px; font-weight: 700; }
 .sets { display: flex; gap: 7px; margin-top: 11px; flex-wrap: wrap; }
-.setchip { min-width: 42px; height: 36px; border-radius: 11px; border: 1.5px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--ink-2); gap: 3px; background: var(--bg); font-family: var(--mono); padding: 0 6px; }
+.setchip { min-width: 42px; height: 36px; border-radius: 11px; border: 1.5px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--ink-2); gap: 3px; background: var(--inset); font-family: var(--mono); padding: 0 6px; }
 .setchip.done { border-color: transparent; background: color-mix(in srgb, var(--done) 18%, transparent); color: var(--done); }
 .setchip.part { border-color: transparent; background: color-mix(in srgb, var(--ember) 18%, transparent); color: var(--ember); }
 .setchip svg { width: 13px; height: 13px; }
@@ -236,7 +238,7 @@ input, select { font-family: inherit; }
 @keyframes slideup { from { transform: translateY(100%); } }
 @media (prefers-reduced-motion: reduce) { .sheet, .sheet-backdrop { animation: none; } }
 .sheet-grabber { width: 40px; height: 4px; border-radius: 99px; background: var(--line); margin: 8px auto 4px; }
-.setrow { display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 13px; background: var(--bg); }
+.setrow { display: flex; align-items: center; gap: 11px; padding: 9px 11px; border-radius: 13px; background: var(--inset); border: 1px solid var(--line); }
 .setrow.done { background: color-mix(in srgb, var(--done) 13%, transparent); }
 .setrow.active { border: 1.5px solid color-mix(in srgb, var(--ember) 48%, transparent); background: var(--surface); }
 .setrow .lbl { flex: 1; font-weight: 650; font-size: 14px; }
@@ -334,7 +336,7 @@ input, select { font-family: inherit; }
 /* Workout clock */
 .clock { padding: 15px 16px; margin-bottom: 12px; }
 .clock-ex { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.clock-select { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 15px; font-weight: 650; color: var(--ink); background: var(--bg); }
+.clock-select { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 15px; font-weight: 650; color: var(--ink); background: var(--inset); }
 .clock-setno { flex: none; font-size: 13px; font-weight: 700; color: var(--ink-2); background: var(--surface-2); border-radius: 999px; padding: 6px 11px; }
 .clock-main { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .clock-total { display: flex; flex-direction: column; }
@@ -364,7 +366,7 @@ input, select { font-family: inherit; }
 .clock-bar-legend .dot.rest { background: color-mix(in srgb, var(--ink-3) 45%, var(--surface-2)); }
 
 /* Exercise-bound timer extras */
-.clock-reps { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; background: var(--bg); border-radius: 13px; padding: 8px 12px; }
+.clock-reps { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; background: var(--inset); border: 1px solid var(--line); border-radius: 13px; padding: 8px 12px; }
 .clock-reps-lab { font-size: 12.5px; font-weight: 650; color: var(--ink-2); }
 .clock-rest { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: 13px; background: color-mix(in srgb, var(--ember) 12%, transparent); }
 .clock-rest-ic { width: 30px; height: 30px; flex: none; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--ember) 18%, transparent); color: var(--ember); }
