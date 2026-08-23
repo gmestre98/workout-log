@@ -9,14 +9,16 @@ import { Ring } from "./Ring";
 import { LogSheet } from "./LogSheet";
 import { WorkoutClock } from "./WorkoutClock";
 import { ConfirmDialog } from "./Modal";
+import { ProfileMenu } from "./ProfileMenu";
 import { IconCheck, IconPlus } from "./icons";
 
 const today = todayISO();
 const dayHasActivity = (d: DayLog) =>
   Object.values(d.exercises).some((l) => l.sets.some((s) => s.completed));
 
-export function Today() {
+export function Today({ email }: { email: string }) {
   const [date, setDate] = useState(today);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [liveExercises, setLiveExercises] = useState<Exercise[]>([]);
   const [day, setDay] = useState<DayLog | null>(null);
   const [activeDates, setActiveDates] = useState<Set<string>>(new Set());
@@ -150,7 +152,7 @@ export function Today() {
           <div className="subt">{hdr.dow} · {hdr.label}</div>
           <div className="title">Today</div>
         </div>
-        <button className="avatar" title="Account" onClick={() => setSigningOut(true)}>G</button>
+        <button className="avatar" title="Account" onClick={() => setProfileOpen(true)}>{(email.trim()[0] || "?").toUpperCase()}</button>
       </div>
 
       <div className="datebar">
@@ -235,6 +237,14 @@ export function Today() {
           date={date}
           onChange={(m) => update(sheetEx, m)}
           onClose={() => setSheetFor(null)}
+        />
+      )}
+
+      {profileOpen && (
+        <ProfileMenu
+          email={email}
+          onClose={() => setProfileOpen(false)}
+          onSignOut={() => { setProfileOpen(false); setSigningOut(true); }}
         />
       )}
 

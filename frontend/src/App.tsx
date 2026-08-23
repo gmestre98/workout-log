@@ -35,7 +35,7 @@ export function App() {
   return (
     <div className="app">
       <main className="content">
-        {tab === "today" && <Today />}
+        {tab === "today" && <Today email={auth.email} />}
         {tab === "history" && <History />}
         {tab === "stats" && <Stats />}
         {tab === "routine" && <Routine />}
