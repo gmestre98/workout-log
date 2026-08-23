@@ -9,6 +9,8 @@ complete each day — a replacement for the monthly tracking spreadsheet.
   fewer than planned. Completion % is computed as *reps done ÷ reps planned*.
 - **Stats** per month: average completion, days above 50%, days above 0%, and a
   per-day chart — the same figures the spreadsheet produced.
+- **Export** your whole log to a new, formatted Google Sheet in your Drive
+  (connect once via the profile popup; see [docs/GCP_SETUP.md](docs/GCP_SETUP.md)).
 
 ## Stack
 

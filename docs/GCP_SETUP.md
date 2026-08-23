@@ -203,3 +203,46 @@ web OAuth client on a personal, org-less project). In the Cloud Console:
 `OAUTH_REDIRECT_URL`, `ALLOWED_EMAIL`, and all other variables/secrets are
 already set.
 
+---
+
+## Google Sheets export (one-time)
+
+The "Export to Google Sheets" button (in the Today-screen profile popup) writes
+your whole log into a new, formatted Google Sheet in your Drive. It uses a
+**separate** Google authorization from sign-in — you connect once, granting only
+the `drive.file` scope, and the app stores the resulting refresh token
+**encrypted** (AES-GCM keyed off `SESSION_SECRET`) in Firestore. Sign-in itself
+is unchanged.
+
+`drive.file` is the least-privilege scope: the app can create and write **only
+the spreadsheets it creates**, never your other Drive files. It is a
+non-sensitive scope, so no Google app verification is needed (and the app stays
+in *Testing* with you as the only test user regardless).
+
+Three console changes enable it:
+
+1. **Enable the Sheets + Drive APIs:**
+
+   ```bash
+   gcloud services enable sheets.googleapis.com drive.googleapis.com \
+     --project=intricate-reef-424222-d6
+   ```
+
+2. **Add the second redirect URI.** In **APIs & Services → Credentials →** your
+   OAuth client → *Authorized redirect URIs*, add (alongside `/auth/callback`):
+
+   - `https://workout-log-qectzihgmq-ew.a.run.app/auth/sheets/callback`
+   - `http://localhost:8080/auth/sheets/callback` (for local end-to-end testing)
+
+   The server derives this URL from `OAUTH_REDIRECT_URL` by swapping the path, so
+   no new env var or GitHub variable is needed.
+
+3. **Add the scope.** In **APIs & Services → OAuth consent screen → Data access
+   → Add or remove scopes**, add
+   `https://www.googleapis.com/auth/drive.file`, then Save.
+
+After redeploying, open the app → avatar → **Export → Connect Google Sheets**,
+approve the one-time consent, then **Export to Google Sheets**. Each export
+creates a fresh spreadsheet and opens it in a new tab; **Disconnect** revokes the
+stored token.
+

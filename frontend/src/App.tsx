@@ -29,6 +29,13 @@ export function App() {
       .catch((err) => setAuth({ status: err instanceof UnauthorizedError ? "out" : "out" }));
   }, []);
 
+  // Tidy the URL after returning from the Google Sheets connect redirect.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("sheets")) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
+  }, []);
+
   if (auth.status === "loading") return <div className="app"><div className="center">Loading…</div></div>;
   if (auth.status === "out") return <div className="app"><SignIn /></div>;
 

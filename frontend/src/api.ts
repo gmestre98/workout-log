@@ -69,6 +69,13 @@ export const api = {
   loadVersion: (id: string) =>
     request<Exercise[]>("POST", `/api/routine/versions/${id}/load`),
 
+  // Google Sheets export. Connecting is an OAuth redirect (a full-page
+  // navigation to /auth/sheets/connect), so it is not a fetch here; these cover
+  // status, export, and disconnect.
+  sheetsStatus: () => request<{ connected: boolean }>("GET", "/auth/sheets"),
+  exportSheets: () => request<{ url: string; title: string }>("POST", "/api/export/sheets"),
+  disconnectSheets: () => request<void>("DELETE", "/auth/sheets"),
+
   listSchedule: () => request<VersionAssignment[]>("GET", "/api/routine/schedule"),
   setAssignment: (startDate: string, versionId: string) =>
     request<VersionAssignment>("PUT", `/api/routine/schedule/${startDate}`, { versionId }),

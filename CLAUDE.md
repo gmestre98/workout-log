@@ -36,6 +36,18 @@ CI runs the frontend on **Node 22**. Newer local Node (24+) exposes a global
 `localStorage` that shadows jsdom's and makes the `localStorage`-based tests
 (e.g. `src/timer.test.ts`) throw locally; those same tests pass on CI's Node 22.
 
+## Google Sheets export
+
+"Export to Google Sheets" (profile popup) writes all data into a new formatted
+Sheet in the user's Drive. It uses a **separate** OAuth authorization from login
+(`internal/auth/sheets.go`): the `drive.file` scope only, with offline access,
+and the refresh token stored **encrypted** (AES-GCM off `SESSION_SECRET`) in the
+store's settings KV. Login scopes are untouched. The sheets callback URL is
+derived from `OAUTH_REDIRECT_URL` (path swapped to `/auth/sheets/callback`), so
+that redirect URI must be registered in the OAuth client — see
+[docs/GCP_SETUP.md](docs/GCP_SETUP.md). Spreadsheet building lives in
+`internal/export` (pure row builders + a thin Sheets API `Run`).
+
 ## Frontend theming
 
 Color themes are driven by a `data-theme` attribute on `<html>`

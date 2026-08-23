@@ -56,4 +56,26 @@ describe("api client", () => {
     (fetch as any).mockResolvedValue({ status: 204, ok: true });
     await expect(api.deleteExercise("ex-1")).resolves.toBeUndefined();
   });
+
+  it("reads Google Sheets connection status", async () => {
+    (fetch as any).mockResolvedValue({ status: 200, ok: true, json: async () => ({ connected: true }) });
+    await expect(api.sheetsStatus()).resolves.toEqual({ connected: true });
+    expect(fetch).toHaveBeenCalledWith("/auth/sheets", expect.objectContaining({ method: "GET" }));
+  });
+
+  it("posts an export and returns the sheet URL", async () => {
+    (fetch as any).mockResolvedValue({
+      status: 200,
+      ok: true,
+      json: async () => ({ url: "https://docs.google.com/spreadsheets/d/abc", title: "Workout Log — 2026-08-23 10:00" }),
+    });
+    const res = await api.exportSheets();
+    expect(res.url).toContain("spreadsheets");
+    expect(fetch).toHaveBeenCalledWith("/api/export/sheets", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("surfaces a not-connected export error", async () => {
+    (fetch as any).mockResolvedValue({ status: 400, ok: false, json: async () => ({ error: "connect Google Sheets first" }) });
+    await expect(api.exportSheets()).rejects.toThrow("connect Google Sheets first");
+  });
 });

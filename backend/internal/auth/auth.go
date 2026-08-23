@@ -43,6 +43,11 @@ type Service struct {
 	oauth    *oauth2.Config
 	sessions *SessionManager
 	watch    WatchTokenStore // nil until UseWatchStore is called; enables watch tokens
+
+	// sheetsOAuth/sheetsStore are nil until UseSheetsStore is called; together
+	// they enable the Google Sheets export authorization (see sheets.go).
+	sheetsOAuth *oauth2.Config
+	sheetsStore SettingStore
 }
 
 // UseWatchStore enables watch-token auth backed by ws (see watch.go). Without

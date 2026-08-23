@@ -3,6 +3,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,17 +11,31 @@ import (
 	"time"
 
 	"github.com/gmestre98/workout-log/backend/internal/domain"
+	"github.com/gmestre98/workout-log/backend/internal/export"
 	"github.com/gmestre98/workout-log/backend/internal/stats"
 	"github.com/gmestre98/workout-log/backend/internal/store"
+
+	gsheets "google.golang.org/api/sheets/v4"
+	"google.golang.org/api/option"
 )
+
+// SheetsExporter supplies an HTTP client authorized for the Google Sheets API.
+// It is satisfied by *auth.Service; the API package stays decoupled from auth.
+type SheetsExporter interface {
+	SheetsClient(ctx context.Context) (*http.Client, error)
+}
 
 // Handler serves the JSON API.
 type Handler struct {
-	store store.Store
+	store  store.Store
+	sheets SheetsExporter // nil until UseSheetsExporter is called
 }
 
 // New returns a Handler backed by s.
 func New(s store.Store) *Handler { return &Handler{store: s} }
+
+// UseSheetsExporter enables the POST /api/export/sheets endpoint.
+func (h *Handler) UseSheetsExporter(e SheetsExporter) { h.sheets = e }
 
 var dateRe = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
@@ -48,7 +63,58 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/routine/schedule", h.listSchedule)
 	mux.HandleFunc("PUT /api/routine/schedule/{date}", h.setAssignment)
 	mux.HandleFunc("DELETE /api/routine/schedule/{date}", h.deleteAssignment)
+	mux.HandleFunc("POST /api/export/sheets", h.exportSheets)
 	return mux
+}
+
+// exportSheets gathers all data and writes it into a new formatted Google Sheet
+// in the user's connected Drive, returning the spreadsheet URL.
+func (h *Handler) exportSheets(w http.ResponseWriter, r *http.Request) {
+	if h.sheets == nil {
+		writeErr(w, http.StatusServiceUnavailable, "sheets export not configured")
+		return
+	}
+	client, err := h.sheets.SheetsClient(r.Context())
+	if err != nil {
+		// Not connected (or token unusable): a 400 the UI turns into a prompt to
+		// connect Google Sheets.
+		writeErr(w, http.StatusBadRequest, "connect Google Sheets first")
+		return
+	}
+	svc, err := gsheets.NewService(r.Context(), option.WithHTTPClient(client))
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "google sheets unavailable")
+		return
+	}
+
+	exercises, err := h.store.ListExercises(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// Whole history: YYYY-MM-DD sorts lexicographically, so these bounds are open.
+	days, err := h.store.ListDays(r.Context(), "0000-01-01", "9999-12-31")
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	versions, err := h.store.ListRoutineVersions(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	url, title, err := export.Run(r.Context(), svc, export.Data{
+		Exercises: exercises,
+		Days:      days,
+		Versions:  versions,
+		Generated: time.Now().UTC(),
+	})
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, "export failed: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"url": url, "title": title})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

@@ -110,6 +110,91 @@ function WatchAccess() {
   );
 }
 
+// SheetsExport manages exporting all data into a formatted Google Sheet. The
+// user connects Google once (an OAuth redirect granting the drive.file scope);
+// afterwards each export creates a fresh spreadsheet in their Drive and opens
+// it in a new tab.
+function SheetsExport() {
+  const [connected, setConnected] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api
+      .sheetsStatus()
+      .then((s) => setConnected(s.connected))
+      .catch((e) => {
+        if (!(e instanceof UnauthorizedError)) setConnected(false);
+      });
+  }, []);
+
+  const connect = () => {
+    // Full-page navigation into the OAuth flow; Google redirects back to the app.
+    window.location.href = "/auth/sheets/connect";
+  };
+
+  const exportNow = async () => {
+    setBusy(true);
+    try {
+      const { url } = await api.exportSheets();
+      window.open(url, "_blank", "noopener");
+      toast("Sheet created in your Drive");
+    } catch (e) {
+      // A 400 means the stored authorization is gone — send them back to connect.
+      const msg = e instanceof Error ? e.message : "";
+      if (msg.includes("connect")) {
+        setConnected(false);
+        toast("Reconnect Google Sheets to export", "error");
+      } else {
+        toast("Couldn't export", "error");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disconnect = async () => {
+    setBusy(true);
+    try {
+      await api.disconnectSheets();
+      setConnected(false);
+      toast("Google Sheets disconnected");
+    } catch {
+      toast("Couldn't disconnect", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="profile-section">
+      <div className="profile-section-title">Export</div>
+      <p className="watch-hint">
+        {connected === null
+          ? "Checking…"
+          : connected
+            ? "Export your whole log to a new, formatted Google Sheet in your Drive."
+            : "Connect Google to export your whole log into a formatted Google Sheet. Only files this app creates are accessible."}
+      </p>
+      <div className="watch-actions">
+        {connected ? (
+          <>
+            <button className="btn" onClick={exportNow} disabled={busy}>
+              Export to Google Sheets
+            </button>
+            <button className="btn danger" onClick={disconnect} disabled={busy}>
+              Disconnect
+            </button>
+          </>
+        ) : (
+          <button className="btn" onClick={connect} disabled={connected === null}>
+            Connect Google Sheets
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ProfileMenu is the small account popup opened from the header avatar. It shows
 // who's signed in, lets them switch light/dark mode, manage watch access, and
 // sign out.
@@ -155,6 +240,8 @@ export function ProfileMenu({
           ))}
         </div>
       </div>
+
+      <SheetsExport />
 
       <WatchAccess />
 

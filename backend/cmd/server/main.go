@@ -72,9 +72,13 @@ func main() {
 	}
 	// Enable watch-token auth (used by the Garmin watch app) backed by the store.
 	authSvc.UseWatchStore(st)
+	// Enable the Google Sheets export authorization (drive.file), backed by the
+	// store's settings KV for the encrypted refresh token.
+	authSvc.UseSheetsStore(st)
 
 	// --- routing ---
 	apiHandler := api.New(st)
+	apiHandler.UseSheetsExporter(authSvc)
 	mux := http.NewServeMux()
 	// Note: "/healthz" is reserved by Google Front End on Cloud Run and never
 	// reaches the container, so the health route is exposed as "/livez".
@@ -89,6 +93,12 @@ func main() {
 	// Watch-token management (browser-authenticated owner mints/revokes a token
 	// that the Garmin watch app then uses as a bearer credential).
 	mux.Handle("/auth/watch-token", authSvc.RequireAuth(http.HandlerFunc(authSvc.WatchToken)))
+	// Google Sheets export authorization. Connect (owner-initiated) and status/
+	// disconnect require the session; the OAuth callback is public (like login's)
+	// and validates the state cookie plus the returned account.
+	mux.Handle("GET /auth/sheets/connect", authSvc.RequireAuth(http.HandlerFunc(authSvc.SheetsConnect)))
+	mux.HandleFunc("GET /auth/sheets/callback", authSvc.SheetsCallback)
+	mux.Handle("/auth/sheets", authSvc.RequireAuth(http.HandlerFunc(authSvc.SheetsAuth)))
 	mux.Handle("/api/", authSvc.RequireAuth(apiHandler.Routes()))
 	mux.Handle("/", spaHandler(env("STATIC_DIR", "./web")))
 
