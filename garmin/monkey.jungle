@@ -1,0 +1,4 @@
+# Build configuration for the Workout Log Connect IQ app.
+# Sources and resources are discovered automatically from source/ and
+# resources/; we only need to point the build at the manifest.
+project.manifest = manifest.xml

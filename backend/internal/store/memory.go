@@ -17,6 +17,7 @@ type Memory struct {
 	days        map[string]domain.DayLog
 	versions    []domain.RoutineVersion
 	assignments map[string]domain.VersionAssignment // keyed by StartDate
+	settings    map[string]string                   // small server-side KV
 	seq         int
 }
 
@@ -26,6 +27,7 @@ func NewMemory() *Memory {
 		exercises:   map[string]domain.Exercise{},
 		days:        map[string]domain.DayLog{},
 		assignments: map[string]domain.VersionAssignment{},
+		settings:    map[string]string{},
 	}
 }
 
@@ -239,5 +241,22 @@ func (m *Memory) DeleteVersionAssignment(_ context.Context, startDate string) er
 		return ErrNotFound
 	}
 	delete(m.assignments, startDate)
+	return nil
+}
+
+func (m *Memory) GetSetting(_ context.Context, key string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	v, ok := m.settings[key]
+	if !ok {
+		return "", ErrNotFound
+	}
+	return v, nil
+}
+
+func (m *Memory) SetSetting(_ context.Context, key, value string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.settings[key] = value
 	return nil
 }

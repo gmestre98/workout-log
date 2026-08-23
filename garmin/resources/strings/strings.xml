@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<strings>
+    <string id="AppName">Workout Log</string>
+
+    <!-- Settings shown in Garmin Connect Mobile / the simulator -->
+    <string id="SettingServer">Server URL</string>
+    <string id="SettingToken">Watch token</string>
+    <string id="SettingServerPrompt">Server URL (e.g. https://your-app.run.app)</string>
+    <string id="SettingTokenPrompt">Paste the token from the phone app</string>
+
+    <!-- In-app copy -->
+    <string id="Setup">Open Garmin Connect and set the Server URL and Watch token in this app's settings.</string>
+    <string id="Loading">Loading…</string>
+    <string id="NoExercises">No active exercises.</string>
+    <string id="ExercisesTitle">Exercises</string>
+    <string id="Saving">Saving…</string>
+    <string id="Saved">Saved</string>
+    <string id="SaveFailed">Save failed</string>
+    <string id="Rest">Rest</string>
+    <string id="Set">Set</string>
+    <string id="Done">Done</string>
+    <string id="StartHint">START to begin</string>
+    <string id="LoadFailed">Couldn't reach server</string>
+</strings>

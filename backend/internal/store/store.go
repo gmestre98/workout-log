@@ -52,4 +52,10 @@ type Store interface {
 	SetVersionAssignment(ctx context.Context, a domain.VersionAssignment) error
 	// DeleteVersionAssignment removes the boundary at startDate.
 	DeleteVersionAssignment(ctx context.Context, startDate string) error
+
+	// GetSetting returns a small server-side value by key, or ErrNotFound if the
+	// key was never set. Used for the watch-token nonce (see internal/auth).
+	GetSetting(ctx context.Context, key string) (string, error)
+	// SetSetting upserts a small server-side value under key.
+	SetSetting(ctx context.Context, key, value string) error
 }

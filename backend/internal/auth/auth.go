@@ -42,7 +42,12 @@ type Service struct {
 	cfg      Config
 	oauth    *oauth2.Config
 	sessions *SessionManager
+	watch    WatchTokenStore // nil until UseWatchStore is called; enables watch tokens
 }
+
+// UseWatchStore enables watch-token auth backed by ws (see watch.go). Without
+// it, watch tokens are disabled and only the session cookie authenticates.
+func (s *Service) UseWatchStore(ws WatchTokenStore) { s.watch = ws }
 
 // NewService builds the auth service.
 func NewService(cfg Config, sessions *SessionManager) *Service {
@@ -168,19 +173,32 @@ func (s *Service) RequireAuth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), emailKey, s.cfg.DevBypassEmail)))
 			return
 		}
-		cookie, err := r.Cookie(SessionCookieName)
-		if err != nil {
-			http.Error(w, "unauthenticated", http.StatusUnauthorized)
-			return
-		}
-		email, err := s.sessions.Verify(cookie.Value)
-		if err != nil {
+		email, ok := s.authenticate(r)
+		if !ok {
 			http.Error(w, "unauthenticated", http.StatusUnauthorized)
 			return
 		}
 		ctx := context.WithValue(r.Context(), emailKey, email)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// authenticate resolves the caller's email from either the session cookie
+// (used by the browser/PWA) or an "Authorization: Bearer <watch-token>" header
+// (used by the Garmin watch app). It returns ok=false when neither is valid.
+func (s *Service) authenticate(r *http.Request) (string, bool) {
+	if c, err := r.Cookie(SessionCookieName); err == nil {
+		if email, err := s.sessions.Verify(c.Value); err == nil {
+			return email, true
+		}
+	}
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+		token := strings.TrimSpace(strings.TrimPrefix(h, "Bearer "))
+		if email, err := s.verifyWatchToken(r.Context(), token); err == nil {
+			return email, true
+		}
+	}
+	return "", false
 }
 
 // EmailFromContext returns the authenticated email set by RequireAuth.

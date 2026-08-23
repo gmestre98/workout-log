@@ -17,6 +17,7 @@ const (
 	daysCollection        = "days"
 	versionsCollection    = "routine_versions"
 	assignmentsCollection = "version_assignments"
+	settingsCollection    = "settings"
 )
 
 // Firestore is a Store backed by Google Cloud Firestore (native mode).
@@ -353,5 +354,31 @@ func (f *Firestore) DeleteVersionAssignment(ctx context.Context, startDate strin
 		return err
 	}
 	_, err := ref.Delete(ctx)
+	return err
+}
+
+// settingDoc is how a Setting value is stored: one document per key, holding a
+// single "value" field.
+type settingDoc struct {
+	Value string `firestore:"value"`
+}
+
+func (f *Firestore) GetSetting(ctx context.Context, key string) (string, error) {
+	doc, err := f.client.Collection(settingsCollection).Doc(key).Get(ctx)
+	if status.Code(err) == codes.NotFound {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	var s settingDoc
+	if err := doc.DataTo(&s); err != nil {
+		return "", err
+	}
+	return s.Value, nil
+}
+
+func (f *Firestore) SetSetting(ctx context.Context, key, value string) error {
+	_, err := f.client.Collection(settingsCollection).Doc(key).Set(ctx, settingDoc{Value: value})
 	return err
 }

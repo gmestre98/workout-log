@@ -70,6 +70,8 @@ func main() {
 	if v := os.Getenv("DEV_AUTH_EMAIL"); v != "" {
 		log.Printf("WARNING: DEV_AUTH_EMAIL set — auth is bypassed as %s (dev only)", v)
 	}
+	// Enable watch-token auth (used by the Garmin watch app) backed by the store.
+	authSvc.UseWatchStore(st)
 
 	// --- routing ---
 	apiHandler := api.New(st)
@@ -84,6 +86,9 @@ func main() {
 	mux.HandleFunc("GET /auth/callback", authSvc.Callback)
 	mux.HandleFunc("POST /auth/logout", authSvc.Logout)
 	mux.Handle("GET /auth/me", authSvc.RequireAuth(http.HandlerFunc(authSvc.Me)))
+	// Watch-token management (browser-authenticated owner mints/revokes a token
+	// that the Garmin watch app then uses as a bearer credential).
+	mux.Handle("/auth/watch-token", authSvc.RequireAuth(http.HandlerFunc(authSvc.WatchToken)))
 	mux.Handle("/api/", authSvc.RequireAuth(apiHandler.Routes()))
 	mux.Handle("/", spaHandler(env("STATIC_DIR", "./web")))
 

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  User-facing settings. These appear under the app in Garmin Connect Mobile
+  (Connect IQ Store -> the app -> Settings) so the token/URL can be pasted from
+  the phone without typing on the watch.
+-->
+<settings>
+    <setting propertyKey="@Properties.serverUrl" title="@Strings.SettingServer" prompt="@Strings.SettingServerPrompt">
+        <settingConfig type="alphaNumeric"/>
+    </setting>
+    <setting propertyKey="@Properties.apiToken" title="@Strings.SettingToken" prompt="@Strings.SettingTokenPrompt">
+        <settingConfig type="alphaNumeric"/>
+    </setting>
+</settings>

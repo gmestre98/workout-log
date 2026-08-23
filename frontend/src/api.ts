@@ -35,6 +35,14 @@ export const api = {
   me: () => request<{ email: string }>("GET", "/auth/me"),
   logout: () => request<void>("POST", "/auth/logout"),
 
+  // Watch access: a long-lived bearer token the Garmin watch app uses to log
+  // sets without Google SSO. Minting rotates the token (invalidating any prior
+  // one); revoking cuts off all tokens.
+  watchTokenStatus: () => request<{ active: boolean }>("GET", "/auth/watch-token"),
+  mintWatchToken: () =>
+    request<{ token: string; expiresAt: string }>("POST", "/auth/watch-token"),
+  revokeWatchToken: () => request<void>("DELETE", "/auth/watch-token"),
+
   listExercises: () => request<Exercise[]>("GET", "/api/exercises"),
   createExercise: (e: Omit<Exercise, "id">) => request<Exercise>("POST", "/api/exercises", e),
   updateExercise: (e: Exercise) => request<Exercise>("PUT", `/api/exercises/${e.id}`, e),

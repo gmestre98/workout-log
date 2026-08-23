@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Connect IQ manifest for the Workout Log watch app (Garmin fenix 6 Pro).
+  The app id below is unique to this app; keep it stable across rebuilds so the
+  watch treats new .prg files as updates rather than a different app.
+-->
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+    <iq:application entry="WorkoutLogApp"
+                    id="97616dfcab4545299eadd2ccc6ba1013"
+                    launcherIcon="@Drawables.LauncherIcon"
+                    minApiLevel="3.1.0"
+                    name="@Strings.AppName"
+                    type="watch-app">
+        <iq:products>
+            <iq:product id="fenix6pro"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="Communications"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+    </iq:application>
+</iq:manifest>

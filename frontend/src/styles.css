@@ -322,6 +322,16 @@ input, select { font-family: inherit; color: inherit; }
 .segmented .seg.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
 .profile-signout { width: 100%; }
 
+/* Watch access section */
+.watch-hint { font-size: 12.5px; line-height: 1.45; color: var(--ink-2); margin: 0 0 10px; }
+.watch-field-label { display: block; font-family: var(--mono); font-size: 10px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .07em; margin: 0 0 4px; }
+.watch-field { display: flex; align-items: center; gap: 8px; background: var(--inset); border: 1px solid var(--line); border-radius: 11px; padding: 8px 10px; margin-bottom: 10px; }
+.watch-field code { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-field code.watch-token { white-space: nowrap; overflow-x: auto; }
+.btn.tiny { padding: 6px 10px; font-size: 12px; border-radius: 9px; flex: none; }
+.watch-actions { display: flex; gap: 8px; }
+.watch-actions .btn { flex: 1; }
+
 /* Segmented choice (save-version dialog) */
 .segmented { display: flex; gap: 8px; }
 .segmented .seg {
