@@ -1,10 +1,27 @@
 package export
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/gmestre98/workout-log/backend/internal/domain"
+	"google.golang.org/api/googleapi"
 )
+
+func TestTransientClassifiesRetryable(t *testing.T) {
+	if !transient(&googleapi.Error{Code: 503}) {
+		t.Fatal("503 should be transient")
+	}
+	if !transient(&googleapi.Error{Code: 429}) {
+		t.Fatal("429 should be transient")
+	}
+	if transient(&googleapi.Error{Code: 400}) {
+		t.Fatal("400 must not be transient")
+	}
+	if transient(errors.New("boom")) {
+		t.Fatal("non-API error must not be transient")
+	}
+}
 
 func ex(id, name string, active bool) domain.Exercise {
 	return domain.Exercise{ID: id, Name: name, Active: active, Unit: domain.UnitReps, PlannedSets: 2, PlannedAmount: 10}

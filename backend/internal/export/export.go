@@ -5,12 +5,14 @@ package export
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/gmestre98/workout-log/backend/internal/domain"
 	"github.com/gmestre98/workout-log/backend/internal/stats"
 
+	"google.golang.org/api/googleapi"
 	gsheets "google.golang.org/api/sheets/v4"
 )
 
@@ -146,7 +148,10 @@ func Run(ctx context.Context, svc *gsheets.Service, d Data) (string, string, err
 
 	title := "Workout Log — " + d.Generated.Format("2006-01-02 15:04")
 	ss := &gsheets.Spreadsheet{
-		Properties: &gsheets.SpreadsheetProperties{Title: title},
+		// Pin the locale so numeric literals in formatting requests (e.g. the
+		// colour-scale midpoint "0.5") parse regardless of the account's locale:
+		// a comma-decimal locale otherwise rejects "0.5" as an invalid number.
+		Properties: &gsheets.SpreadsheetProperties{Title: title, Locale: "en_US"},
 		Sheets: []*gsheets.Sheet{
 			sheet(sheetDaily, 1, 1),
 			sheet(sheetSummary, 1, 0),
@@ -154,8 +159,12 @@ func Run(ctx context.Context, svc *gsheets.Service, d Data) (string, string, err
 			sheet(sheetVersions, 1, 0),
 		},
 	}
-	created, err := svc.Spreadsheets.Create(ss).Context(ctx).Do()
-	if err != nil {
+	var created *gsheets.Spreadsheet
+	if err := retry(ctx, func() error {
+		var e error
+		created, e = svc.Spreadsheets.Create(ss).Context(ctx).Do()
+		return e
+	}); err != nil {
 		return "", "", fmt.Errorf("create spreadsheet: %w", err)
 	}
 
@@ -176,7 +185,10 @@ func Run(ctx context.Context, svc *gsheets.Service, d Data) (string, string, err
 			{Range: a1(sheetVersions), Values: versions},
 		},
 	}
-	if _, err := svc.Spreadsheets.Values.BatchUpdate(created.SpreadsheetId, values).Context(ctx).Do(); err != nil {
+	if err := retry(ctx, func() error {
+		_, e := svc.Spreadsheets.Values.BatchUpdate(created.SpreadsheetId, values).Context(ctx).Do()
+		return e
+	}); err != nil {
 		return "", "", fmt.Errorf("write values: %w", err)
 	}
 
@@ -201,11 +213,47 @@ func Run(ctx context.Context, svc *gsheets.Service, d Data) (string, string, err
 		reqs = append(reqs, autoResize(idByTitle[name]))
 	}
 	upd := &gsheets.BatchUpdateSpreadsheetRequest{Requests: reqs}
-	if _, err := svc.Spreadsheets.BatchUpdate(created.SpreadsheetId, upd).Context(ctx).Do(); err != nil {
+	if err := retry(ctx, func() error {
+		_, e := svc.Spreadsheets.BatchUpdate(created.SpreadsheetId, upd).Context(ctx).Do()
+		return e
+	}); err != nil {
 		return "", "", fmt.Errorf("format spreadsheet: %w", err)
 	}
 
 	return created.SpreadsheetUrl, title, nil
+}
+
+// retry runs fn up to 4 times, backing off between attempts, but only while the
+// error is a transient Google backend error (HTTP 429 or 5xx — e.g. the Sheets
+// API's "503 backendError" that can occur right after the API is enabled or
+// under transient load). Non-transient errors return immediately.
+func retry(ctx context.Context, fn func() error) error {
+	const attempts = 4
+	var err error
+	for i := 0; i < attempts; i++ {
+		if err = fn(); err == nil || !transient(err) {
+			return err
+		}
+		if i == attempts-1 {
+			break
+		}
+		backoff := time.Duration(1<<i) * 500 * time.Millisecond // 0.5s, 1s, 2s
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+		}
+	}
+	return err
+}
+
+// transient reports whether err is a retryable Google API error (429 or 5xx).
+func transient(err error) bool {
+	var gerr *googleapi.Error
+	if errors.As(err, &gerr) {
+		return gerr.Code == 429 || gerr.Code >= 500
+	}
+	return false
 }
 
 func sheet(title string, frozenRows, frozenCols int64) *gsheets.Sheet {
