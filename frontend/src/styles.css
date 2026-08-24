@@ -239,43 +239,42 @@ input, select { font-family: inherit; color: inherit; }
 .rarrow { color: var(--ink-3); font-size: 13px; }
 .rloop { color: var(--ember); font-size: 14px; font-weight: 700; }
 
-/* Routine — day-first cards */
-.day-card { margin-top: 14px; overflow: hidden; }
+/* Routine — day-first cards. overflow stays visible so a row dragged past the
+   card's edge isn't clipped. */
+.day-card { margin-top: 14px; }
 .day-head { display: flex; align-items: center; gap: 10px; padding: 13px 15px 12px; }
 .day-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; background: currentColor; box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 16%, transparent); }
 .day-name { font-size: 15.5px; font-weight: 780; letter-spacing: -.01em; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .day-spacer { flex: 1; }
 .day-count { font-size: 11px; color: var(--ink-3); font-weight: 500; }
 .day-menu { color: var(--ink-3); font-size: 20px; line-height: 1; letter-spacing: -1px; padding: 0 4px; background: none; border: none; }
-.day-ex { display: flex; align-items: center; gap: 11px; padding: 12px 15px; border-top: 1px solid var(--line); width: 100%; text-align: left; background: none; border-left: none; border-right: none; border-bottom: none; color: var(--ink); }
+.day-ex { display: flex; align-items: center; gap: 10px; padding: 2px 0; width: 100%; text-align: left; background: none; border: none; color: var(--ink); min-width: 0; }
 .day-ex .dx-body { flex: 1; min-width: 0; }
 .day-ex .dx-name { font-size: 14.5px; font-weight: 700; display: block; }
 .day-ex .dx-meta { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); margin-top: 2px; display: block; }
 .day-ex .dx-chev { color: var(--ink-3); font-size: 17px; flex: none; }
-.add-ex { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 12px; border-top: 1px solid var(--line); width: 100%; background: none; border-left: none; border-right: none; border-bottom: none; color: var(--ember); font-weight: 680; font-size: 13.5px; }
-.add-ex svg { width: 16px; height: 16px; }
 .add-day { margin-top: 16px; width: 100%; padding: 13px; border: 1.5px dashed color-mix(in srgb, var(--ember) 42%, var(--line)); border-radius: 16px; background: transparent; color: var(--ember); font-weight: 720; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .add-day svg { width: 17px; height: 17px; }
 
-/* Routine — parts within a day + drag handles */
-.part { border-top: 1px solid var(--line); }
-.part-head { display: flex; align-items: center; gap: 8px; padding: 9px 15px 5px; }
-.part-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Routine — day body: parts (sections) with their exercises tabbed underneath */
+.pb-head { display: flex; align-items: center; gap: 7px; padding: 11px 13px 6px; border-top: 1px solid var(--line); }
+.part-title { font-size: 10.5px; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .part-count { font-size: 10.5px; color: var(--ink-3); font-weight: 500; margin-left: auto; }
-.day-ex-row { display: flex; align-items: center; gap: 4px; padding-left: 6px; }
-.day-ex-row .day-ex { flex: 1; min-width: 0; }
-.grip { color: var(--ink-3); font-size: 16px; line-height: 1; padding: 8px 7px; flex: none; user-select: none; -webkit-user-select: none; border-radius: 8px; }
+.pb-add { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: none; border: none; color: var(--ink-3); flex: none; }
+.pb-add:hover { color: var(--ember); background: color-mix(in srgb, var(--ember) 10%, transparent); }
+.pb-add svg { width: 15px; height: 15px; }
+/* Exercises sit indented under their part header. */
+.pb-ex { display: flex; align-items: center; gap: 6px; padding: 8px 14px 8px 22px; }
+.grip { width: 28px; text-align: center; color: var(--ink-3); font-size: 16px; line-height: 1; padding: 8px 0; flex: none; user-select: none; -webkit-user-select: none; border-radius: 8px; }
 .grip:hover { color: var(--ink-2); background: var(--surface-2); }
 .grip:active { cursor: grabbing; color: var(--ember); background: color-mix(in srgb, var(--ember) 12%, transparent); }
-/* Lift the row being dragged; its inner surface gets the elevation. */
-.rdrag { position: relative; z-index: 5; }
-.rdrag > .card, .rdrag > .part, .rdrag > .day-ex-row {
-  box-shadow: var(--shadow); border-radius: 14px;
-  background: var(--surface); outline: 1px solid color-mix(in srgb, var(--ember) 35%, transparent);
-}
-.rdrag > .part { background: var(--surface-2); }
+.grip-sp { width: 28px; flex: none; }
+/* Lift the row(s) being dragged. */
+.rdrag { position: relative; z-index: 6; }
+.rdrag > .card { box-shadow: var(--shadow); border-radius: 16px; outline: 1px solid color-mix(in srgb, var(--ember) 35%, transparent); }
+.rdrag > .pb-ex, .rdrag > .pb-head { background: var(--surface-2); box-shadow: var(--shadow); border-radius: 12px; outline: 1px solid color-mix(in srgb, var(--ember) 28%, transparent); border-top-color: transparent; }
 .rdrag .grip { color: var(--ember); }
-.add-part { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 9px; border: none; border-top: 1px solid var(--line); background: none; color: var(--ink-3); font-weight: 650; font-size: 12.5px; }
+.add-part { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px; border: none; border-top: 1px solid var(--line); background: none; color: var(--ink-3); font-weight: 650; font-size: 12.5px; }
 .add-part svg { width: 14px; height: 14px; }
 
 /* Versions — grouped sections + save CTA */

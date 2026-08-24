@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { Exercise, Unit } from "../types";
 import { DEFAULT_DAYS, DEFAULT_PARTS, DEFAULT_WORKOUT_DAY, UNITS } from "../types";
-import { dayOf, orderedParts, orderedWorkoutDays, primaryMuscle, slotColor } from "../format";
+import { dayOf, orderedParts, orderedWorkoutDays, slotColor } from "../format";
 import { toast } from "../toast";
 import { useOnline } from "../useOnline";
 import { ConfirmDialog, Modal } from "./Modal";
 import { ReorderList } from "./Reorder";
+import { DayBody } from "./DayBody";
 import { IconPlus } from "./icons";
 
 type Draft = Omit<Exercise, "id"> & { id?: string };
@@ -16,8 +17,6 @@ const blank = (sortOrder: number, workoutDay = DEFAULT_WORKOUT_DAY, timeSlot = D
   unit: "reps", note: "", restSeconds: 30, muscleGroup: "", equipment: "None",
   sortOrder, active: true, perSide: false,
 });
-
-const unitSuffix = (u: Unit) => (u === "reps" ? "" : u === "seconds" ? "s" : "min");
 
 // nextDayLabel suggests a label for a brand-new workout day: the first default
 // ("Day 1", "Day 2"…) not already used, or "Day N+1" once the defaults run out.
@@ -73,16 +72,19 @@ export function Routine() {
 
   const days = useMemo(() => orderedWorkoutDays(exercises), [exercises]);
   const exsOfDay = (d: string) => exercises.filter((e) => dayOf(e) === d);
-  const exsOfDayPart = (d: string, p: string) => exsOfDay(d).filter((e) => e.timeSlot === p);
 
   // Persist a fully re-flattened order: renumber sortOrder to array position and
-  // push the exercises whose position changed. State updates optimistically so
-  // the list doesn't flicker while the writes are in flight.
+  // push every exercise whose position OR grouping (part/day) changed. State
+  // updates optimistically so the list doesn't flicker while writes are in
+  // flight.
   const applyOrder = (flat: Exercise[]) => {
     if (offline) return;
     const renumbered = flat.map((e, i) => ({ ...e, sortOrder: i }));
-    const prev = new Map(exercises.map((e) => [e.id, e.sortOrder]));
-    const changed = renumbered.filter((e) => prev.get(e.id) !== e.sortOrder);
+    const prev = new Map(exercises.map((e) => [e.id, e]));
+    const changed = renumbered.filter((e) => {
+      const p = prev.get(e.id);
+      return !p || p.sortOrder !== e.sortOrder || p.timeSlot !== e.timeSlot || p.workoutDay !== e.workoutDay;
+    });
     setExercises(renumbered);
     if (changed.length === 0) return;
     Promise.all(changed.map((e) => api.updateExercise(e)))
@@ -91,13 +93,10 @@ export function Routine() {
 
   const reorderDays = (newDays: string[]) => applyOrder(newDays.flatMap((d) => exsOfDay(d)));
 
-  const reorderParts = (day: string, newParts: string[]) =>
-    applyOrder(days.flatMap((d) => (d === day ? newParts.flatMap((p) => exsOfDayPart(day, p)) : exsOfDay(d))));
-
-  const reorderExercises = (day: string, part: string, newExs: Exercise[]) =>
-    applyOrder(days.flatMap((d) =>
-      orderedParts(exsOfDay(d)).flatMap((p) => (d === day && p === part ? newExs : exsOfDayPart(d, p)))
-    ));
+  // Replace one day's exercises (new order + parts from DayBody), keeping the
+  // other days untouched.
+  const reorderDayExercises = (day: string, newExs: Exercise[]) =>
+    applyOrder(days.flatMap((d) => (d === day ? newExs : exsOfDay(d))));
 
   // Rename a workout day: retag every exercise in it. Past day logs keep the old
   // label they were stamped with, so history is unaffected.
@@ -196,7 +195,6 @@ export function Routine() {
         disabled={offline || days.length < 2}
         renderItem={(day, { handleProps }) => {
           const dayExs = exsOfDay(day);
-          const parts = orderedParts(dayExs);
           const color = slotColor(day, days);
           return (
             <div className="card day-card">
@@ -208,51 +206,14 @@ export function Routine() {
                 <span className="day-count num">{dayExs.length}</span>
                 <button className="day-menu" onClick={() => setMenuForDay(day)} aria-label={`Manage ${day}`} disabled={offline}>⋯</button>
               </div>
-
-              <ReorderList
-                items={parts}
-                getKey={(p) => p}
-                onReorder={(np) => reorderParts(day, np)}
-                disabled={offline || parts.length < 2}
-                renderItem={(part, { handleProps: partHandle }) => {
-                  const partExs = exsOfDayPart(day, part);
-                  return (
-                    <div className="part">
-                      <div className="part-head">
-                        {parts.length > 1 && <Grip {...partHandle} />}
-                        <span className="part-title">{part || "Unsorted"}</span>
-                        <span className="part-count num">{partExs.length}</span>
-                      </div>
-                      <ReorderList
-                        items={partExs}
-                        getKey={(e) => e.id}
-                        onReorder={(ne) => reorderExercises(day, part, ne)}
-                        disabled={offline || partExs.length < 2}
-                        renderItem={(ex, { handleProps: exHandle }) => (
-                          <div className="day-ex-row" style={ex.active ? undefined : { opacity: 0.5 }}>
-                            {partExs.length > 1 && <Grip {...exHandle} />}
-                            <button className="day-ex" onClick={() => setDraft({ ...ex })} disabled={offline}>
-                              <span className="dx-body">
-                                <span className="dx-name">{ex.name}{!ex.active && <span className="pillbadge" style={{ marginLeft: 6 }}>off</span>}</span>
-                                <span className="dx-meta">{ex.plannedSets} × {ex.plannedAmount} {unitSuffix(ex.unit)}{ex.perSide ? " · per side" : ""}{ex.restSeconds > 0 ? ` · ${ex.restSeconds}s rest` : ""}</span>
-                              </span>
-                              {ex.muscleGroup && <span className="pillbadge">{primaryMuscle(ex.muscleGroup)}</span>}
-                              <span className="dx-chev">›</span>
-                            </button>
-                          </div>
-                        )}
-                      />
-                      <button className="add-ex" onClick={() => setDraft(blank(exercises.length, day, part))} disabled={offline}>
-                        <IconPlus /> Add exercise
-                      </button>
-                    </div>
-                  );
-                }}
+              <DayBody
+                exercises={dayExs}
+                disabled={offline}
+                onReorder={(next) => reorderDayExercises(day, next)}
+                onEdit={(ex) => setDraft({ ...ex })}
+                onAddExercise={(part) => setDraft(blank(exercises.length, day, part))}
+                onAddPart={() => setDraft(blank(exercises.length, day, ""))}
               />
-
-              <button className="add-part" onClick={() => setDraft(blank(exercises.length, day, ""))} disabled={offline}>
-                <IconPlus /> Add part
-              </button>
             </div>
           );
         }}
