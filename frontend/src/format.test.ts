@@ -21,13 +21,15 @@ import {
   monthLabel,
   routineForDate,
   setMeta,
+  dayOf,
   orderedWorkoutDays,
+  orderedParts,
   nextWorkoutDay,
 } from "./format";
 import type { DayLog, Exercise } from "./types";
 
 const ex = (id: string, over: Partial<Exercise> = {}): Exercise => ({
-  id, timeSlot: "Wake up", name: id, plannedSets: 1, plannedAmount: 10,
+  id, workoutDay: "Day 1", timeSlot: "Wake up", name: id, plannedSets: 1, plannedAmount: 10,
   unit: "reps", note: "", restSeconds: 0, muscleGroup: "Core", equipment: "None",
   sortOrder: 0, active: true, perSide: false, ...over,
 });
@@ -217,8 +219,8 @@ describe("dayCompletion", () => {
 
   it("scopes to the day's workoutDay, ignoring other days' exercises", () => {
     const exs = [
-      ex("push1", { timeSlot: "Day 1" }), ex("push2", { timeSlot: "Day 1" }),
-      ex("pull1", { timeSlot: "Day 2" }), ex("legs1", { timeSlot: "Day 3" }),
+      ex("push1", { workoutDay: "Day 1" }), ex("push2", { workoutDay: "Day 1" }),
+      ex("pull1", { workoutDay: "Day 2" }), ex("legs1", { workoutDay: "Day 3" }),
     ];
     const d: DayLog = { ...day("2026-08-24", ["push1", "push2"]), workoutDay: "Day 1" };
     // Both Day 1 exercises done -> 100%, Day 2/3 exercises don't drag it down.
@@ -228,11 +230,29 @@ describe("dayCompletion", () => {
   });
 });
 
+describe("dayOf", () => {
+  it("normalises an empty workoutDay to the default day", () => {
+    expect(dayOf({ workoutDay: "Day 2" })).toBe("Day 2");
+    expect(dayOf({ workoutDay: "" })).toBe("Day 1");
+    expect(dayOf({})).toBe("Day 1");
+  });
+});
+
+describe("orderedParts", () => {
+  it("lists distinct parts in first-seen order, keeping blanks", () => {
+    const exs = [{ timeSlot: "Wake up" }, { timeSlot: "Main" }, { timeSlot: "Wake up" }, { timeSlot: "" }];
+    expect(orderedParts(exs)).toEqual(["Wake up", "Main", ""]);
+  });
+});
+
 describe("orderedWorkoutDays", () => {
+  it("groups empty workoutDays under the default day", () => {
+    expect(orderedWorkoutDays([{ workoutDay: "" }, { workoutDay: "Day 2" }, {}])).toEqual(["Day 1", "Day 2"]);
+  });
   it("lists distinct labels in first-seen order", () => {
     const exs = [
-      { timeSlot: "Day 1" }, { timeSlot: "Day 1" },
-      { timeSlot: "Day 2" }, { timeSlot: "Day 3" }, { timeSlot: "Day 2" },
+      { workoutDay: "Day 1" }, { workoutDay: "Day 1" },
+      { workoutDay: "Day 2" }, { workoutDay: "Day 3" }, { workoutDay: "Day 2" },
     ];
     expect(orderedWorkoutDays(exs)).toEqual(["Day 1", "Day 2", "Day 3"]);
     expect(orderedWorkoutDays([])).toEqual([]);

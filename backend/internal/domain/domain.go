@@ -30,7 +30,14 @@ type Exercise struct {
 	// it survives when an Exercise is embedded inside a RoutineVersion snapshot.
 	// With firestore:"-" the ID was dropped in snapshots, so restoring/activating
 	// a version regenerated new IDs and orphaned historical day logs.
-	ID            string `json:"id" firestore:"id"`
+	ID string `json:"id" firestore:"id"`
+	// WorkoutDay is the rotation unit this exercise belongs to, e.g. "Day 1 —
+	// Push". Each training session performs one workout day, rotating through
+	// them. Empty means the exercise predates rotation; callers treat an empty
+	// WorkoutDay as the single default day (see DefaultWorkoutDay).
+	WorkoutDay string `json:"workoutDay" firestore:"workoutDay"`
+	// TimeSlot is the part *within* a workout day, e.g. "Wake up", "Main",
+	// "Mobility". It sub-groups a day's exercises; it is NOT a day of its own.
 	TimeSlot      string `json:"timeSlot" firestore:"timeSlot"`
 	Name          string `json:"name" firestore:"name"`
 	PlannedSets   int    `json:"plannedSets" firestore:"plannedSets"`
@@ -46,6 +53,20 @@ type Exercise struct {
 	// squats). When true each planned set is tracked once per side, so a day log
 	// holds 2*PlannedSets entries ordered left, right, left, right…
 	PerSide bool `json:"perSide" firestore:"perSide"`
+}
+
+// DefaultWorkoutDay is the day an exercise belongs to when its WorkoutDay is
+// empty (i.e. it predates rotation). Grouping and scoring normalise empty to
+// this so old single-routine data reads as one day rather than losing its slot.
+const DefaultWorkoutDay = "Day 1"
+
+// DayOf returns the workout day an exercise belongs to, normalising empty to the
+// default day so ungrouped/legacy exercises still collect into one day.
+func DayOf(e Exercise) string {
+	if e.WorkoutDay == "" {
+		return DefaultWorkoutDay
+	}
+	return e.WorkoutDay
 }
 
 // SetEntry is the result of a single set on a given day. ActualAmount is what

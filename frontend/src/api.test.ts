@@ -36,6 +36,7 @@ describe("api client", () => {
     });
     await expect(
       api.createExercise({
+        workoutDay: "Day 1",
         timeSlot: "Wake up",
         name: "x",
         plannedSets: 0,

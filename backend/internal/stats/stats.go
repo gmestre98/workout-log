@@ -37,14 +37,18 @@ func ExerciseCompletion(log domain.ExerciseLog) float64 {
 // down. Returns 0 when there are no exercises.
 //
 // When day.WorkoutDay is set the day is a single workout in the rotation, so
-// only exercises belonging to that workout day (TimeSlot == WorkoutDay) are
+// only exercises belonging to that workout day (domain.DayOf == WorkoutDay) are
 // averaged — otherwise the other days' exercises would count as 0% and cap the
-// score. An empty WorkoutDay (legacy days) averages the whole routine as before.
+// score. An empty WorkoutDay (legacy days logged before rotation) averages the
+// whole routine as before. If a stamped WorkoutDay matches no current exercise
+// (e.g. the day was renamed or its exercises removed), it also falls back to the
+// whole routine so the day still scores against something.
 func DayAverage(exercises []domain.Exercise, day domain.DayLog) float64 {
+	scoped := day.WorkoutDay != "" && anyInDay(exercises, day.WorkoutDay)
 	var sum float64
 	var n int
 	for _, ex := range exercises {
-		if day.WorkoutDay != "" && ex.TimeSlot != day.WorkoutDay {
+		if scoped && domain.DayOf(ex) != day.WorkoutDay {
 			continue
 		}
 		n++
@@ -56,6 +60,16 @@ func DayAverage(exercises []domain.Exercise, day domain.DayLog) float64 {
 		return 0
 	}
 	return sum / float64(n)
+}
+
+// anyInDay reports whether any exercise belongs to the given workout day.
+func anyInDay(exercises []domain.Exercise, day string) bool {
+	for _, ex := range exercises {
+		if domain.DayOf(ex) == day {
+			return true
+		}
+	}
+	return false
 }
 
 // DayStat is a single day's rolled-up completion.

@@ -257,6 +257,20 @@ input, select { font-family: inherit; color: inherit; }
 .add-day { margin-top: 16px; width: 100%; padding: 13px; border: 1.5px dashed color-mix(in srgb, var(--ember) 42%, var(--line)); border-radius: 16px; background: transparent; color: var(--ember); font-weight: 720; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .add-day svg { width: 17px; height: 17px; }
 
+/* Routine — parts within a day + drag handles */
+.part { border-top: 1px solid var(--line); }
+.part-head { display: flex; align-items: center; gap: 8px; padding: 9px 15px 5px; }
+.part-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.part-count { font-size: 10.5px; color: var(--ink-3); font-weight: 500; margin-left: auto; }
+.day-ex-row { display: flex; align-items: center; gap: 4px; padding-left: 8px; }
+.day-ex-row .day-ex { flex: 1; min-width: 0; }
+.grip { color: var(--ink-3); font-size: 15px; line-height: 1; padding: 6px 4px; flex: none; user-select: none; }
+.grip:active { cursor: grabbing; color: var(--ember); }
+.rdrag { position: relative; z-index: 2; }
+.rdrag > .card, .rdrag > .part, .rdrag > .day-ex-row { box-shadow: var(--shadow); border-radius: 14px; background: var(--surface-2); }
+.add-part { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 9px; border: none; border-top: 1px solid var(--line); background: none; color: var(--ink-3); font-weight: 650; font-size: 12.5px; }
+.add-part svg { width: 14px; height: 14px; }
+
 /* Versions — grouped sections + save CTA */
 .sec-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 4px 10px; }
 .sec-head .sec-count { font-size: 11px; color: var(--ink-3); font-weight: 500; }

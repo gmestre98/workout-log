@@ -1,4 +1,12 @@
 import type { DayLog, Exercise, ExerciseLog, SetEntry, Unit } from "./types";
+import { DEFAULT_WORKOUT_DAY } from "./types";
+
+// dayOf returns the workout day an exercise belongs to, normalising an empty
+// workoutDay (legacy data) to the single default day so ungrouped exercises
+// still collect into one day rather than disappearing.
+export function dayOf(e: { workoutDay?: string }): string {
+  return e.workoutDay ? e.workoutDay : DEFAULT_WORKOUT_DAY;
+}
 
 // exerciseCompletion mirrors the backend: (sum of actual over completed sets) /
 // (number of logged sets * plannedAmount), clamped to [0, 1]. Basing the
@@ -106,14 +114,17 @@ export function setAllSets(log: ExerciseLog, completed: boolean): ExerciseLog {
 // dayCompletion mirrors the backend DayAverage: the mean completion across the
 // given (active) exercises for one day; a missing log counts as 0%. When the day
 // records a workoutDay it is a single workout in the rotation, so only that
-// day's exercises (timeSlot === workoutDay) are averaged — otherwise the other
+// day's exercises (dayOf === workoutDay) are averaged — otherwise the other
 // days' exercises would count as 0% and cap the score. A day with no workoutDay
-// (legacy) averages the whole routine as before.
+// (legacy), or one whose stamped day matches no current exercise (renamed),
+// averages the whole routine.
 export function dayCompletion(exercises: Exercise[], day: DayLog | undefined): number {
+  const wd = day?.workoutDay;
+  const scoped = !!wd && exercises.some((e) => dayOf(e) === wd);
   let sum = 0;
   let n = 0;
   for (const ex of exercises) {
-    if (day?.workoutDay && ex.timeSlot !== day.workoutDay) continue;
+    if (scoped && dayOf(ex) !== wd) continue;
     n++;
     const log = day?.exercises[ex.id];
     if (log) sum += exerciseCompletion(log);
@@ -190,7 +201,7 @@ export function muscleBreakdown(exercises: Exercise[], days: DayLog[]): MuscleSt
     let exSum = 0;
     let n = 0;
     for (const day of days) {
-      if (day.workoutDay && day.workoutDay !== ex.timeSlot) continue;
+      if (day.workoutDay && day.workoutDay !== dayOf(ex)) continue;
       n++;
       const log = day.exercises[ex.id];
       exSum += log ? exerciseCompletion(log) : 0;
@@ -241,13 +252,23 @@ export function routineForDate<E extends { active: boolean; sortOrder: number }>
   return [...v.exercises].sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
-// orderedWorkoutDays lists the distinct workout-day labels (exercise timeSlots)
-// in the order they first appear, so the rotation has a stable sequence. Pass
-// the routine already sorted by sortOrder (as the API returns it); mirrors the
-// orderedSlots pattern used in the Today/Routine screens.
-export function orderedWorkoutDays(exercises: { timeSlot: string }[]): string[] {
+// orderedWorkoutDays lists the distinct workout days (the rotation units) in the
+// order they first appear, so the rotation has a stable sequence. Pass the
+// routine already sorted by sortOrder (as the API returns it). Empty workoutDays
+// normalise to the default day via dayOf.
+export function orderedWorkoutDays(exercises: { workoutDay?: string }[]): string[] {
   const seen: string[] = [];
-  for (const e of exercises) if (e.timeSlot && !seen.includes(e.timeSlot)) seen.push(e.timeSlot);
+  for (const e of exercises) { const d = dayOf(e); if (!seen.includes(d)) seen.push(d); }
+  return seen;
+}
+
+// orderedParts lists the distinct parts (within-day sections, an exercise's
+// timeSlot) in first-appearance order for the given exercises — used to
+// sub-group a single day's exercises. A blank timeSlot is kept as "" so those
+// exercises still render (under an unlabelled part).
+export function orderedParts(exercises: { timeSlot: string }[]): string[] {
+  const seen: string[] = [];
+  for (const e of exercises) if (!seen.includes(e.timeSlot)) seen.push(e.timeSlot);
   return seen;
 }
 

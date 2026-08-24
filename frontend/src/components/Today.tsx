@@ -3,7 +3,7 @@ import { api } from "../api";
 import { getDay, saveDay, subscribeSync, getSyncState, type SyncState } from "../dayStore";
 import type { DayLog, Exercise, ExerciseLog, RoutineVersion, VersionAssignment } from "../types";
 import {
-  addDaysISO, computeStreak, dayCompletion, dayHeader, effectiveVersionId, exerciseCompletion,
+  addDaysISO, computeStreak, dayCompletion, dayHeader, dayOf, effectiveVersionId, exerciseCompletion,
   formatPercent, newLog, nextWorkoutDay, orderedWorkoutDays, routineForDate, setMeta, slotColor, todayISO,
 } from "../format";
 import { Ring } from "./Ring";
@@ -127,7 +127,7 @@ export function Today({ email }: { email: string }) {
   // everything so that history stays visible.
   const exercises = useMemo(() => {
     if (legacy || !selectedDay) return routineExercises;
-    const subset = routineExercises.filter((e) => e.timeSlot === selectedDay);
+    const subset = routineExercises.filter((e) => dayOf(e) === selectedDay);
     if (subset.length === 0 && day && dayHasActivity(day)) return routineExercises;
     return subset;
   }, [legacy, selectedDay, routineExercises, day]);

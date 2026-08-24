@@ -2,6 +2,12 @@ export type Unit = "reps" | "seconds" | "minutes";
 
 export interface Exercise {
   id: string;
+  // The rotation unit this exercise belongs to, e.g. "Day 1 — Push". Each
+  // session performs one workout day. Empty means it predates rotation and is
+  // treated as the single default day (see dayOf / DEFAULT_WORKOUT_DAY).
+  workoutDay: string;
+  // The part *within* a workout day, e.g. "Wake up", "Main", "Mobility". It
+  // sub-groups a day's exercises; it is not a day of its own.
   timeSlot: string;
   name: string;
   plannedSets: number;
@@ -75,8 +81,16 @@ export interface VersionAssignment {
 
 export const UNITS: Unit[] = ["reps", "seconds", "minutes"];
 
-// Suggested workout-day labels offered as quick-pick chips. The field (an
-// exercise's timeSlot) is free text, so users can rename these or add their own
-// — any number of workout days is allowed, and a label can be as descriptive as
+// The workout day an exercise falls under when its workoutDay is unset (legacy
+// data). Grouping and scoring normalise empty to this, so an old single routine
+// reads as one day rather than losing its structure.
+export const DEFAULT_WORKOUT_DAY = "Day 1";
+
+// Suggested workout-day labels (the rotation units) offered as quick-pick chips.
+// Free text — rename or add your own; a label can be as descriptive as
 // "Day 1 — Push". Each session performs one workout day, rotating through them.
-export const DEFAULT_TIME_SLOTS = ["Day 1", "Day 2", "Day 3", "Day 4"];
+export const DEFAULT_DAYS = ["Day 1", "Day 2", "Day 3", "Day 4"];
+
+// Suggested part labels (sections within a day) offered as quick-pick chips.
+// A day's exercises are sub-grouped by these; free text, so any section works.
+export const DEFAULT_PARTS = ["Wake up", "Pre lunch", "Afternoon", "Evening", "Night"];

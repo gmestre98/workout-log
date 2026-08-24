@@ -90,11 +90,12 @@ func TestDayAverageEmptyRoutine(t *testing.T) {
 // With a WorkoutDay set, only that day's exercises are averaged; the other
 // days' exercises are ignored rather than counting as 0% and capping the score.
 func TestDayAverageScopedToWorkoutDay(t *testing.T) {
+	// Exercises span three workout days; TimeSlot is only the within-day part.
 	exercises := []domain.Exercise{
-		{ID: "push1", TimeSlot: "Day 1"},
-		{ID: "push2", TimeSlot: "Day 1"},
-		{ID: "pull1", TimeSlot: "Day 2"},
-		{ID: "legs1", TimeSlot: "Day 3"},
+		{ID: "push1", WorkoutDay: "Day 1", TimeSlot: "Main"},
+		{ID: "push2", WorkoutDay: "Day 1", TimeSlot: "Mobility"},
+		{ID: "pull1", WorkoutDay: "Day 2", TimeSlot: "Main"},
+		{ID: "legs1", WorkoutDay: "Day 3", TimeSlot: "Main"},
 	}
 	day := domain.DayLog{Date: "2026-08-24", WorkoutDay: "Day 1", Exercises: map[string]domain.ExerciseLog{
 		"push1": {PlannedSets: 1, PlannedAmount: 10, Sets: []domain.SetEntry{{Completed: true, ActualAmount: 10}}},
@@ -109,6 +110,25 @@ func TestDayAverageScopedToWorkoutDay(t *testing.T) {
 	legacy.WorkoutDay = ""
 	if got := DayAverage(exercises, legacy); !approx(got, 0.5) {
 		t.Fatalf("legacy: got %v want 0.5", got)
+	}
+	// A stamped day that matches no current exercise (renamed/removed) falls
+	// back to the whole routine rather than scoring 0.
+	stale := day
+	stale.WorkoutDay = "Day 9"
+	if got := DayAverage(exercises, stale); !approx(got, 0.5) {
+		t.Fatalf("stale fallback: got %v want 0.5", got)
+	}
+}
+
+// Exercises with an empty WorkoutDay collect into the default day, so a day
+// stamped with that default scores against them.
+func TestDayAverageEmptyWorkoutDayIsDefault(t *testing.T) {
+	exercises := []domain.Exercise{{ID: "a"}, {ID: "b"}}
+	day := domain.DayLog{Date: "2026-08-24", WorkoutDay: domain.DefaultWorkoutDay, Exercises: map[string]domain.ExerciseLog{
+		"a": {PlannedSets: 1, PlannedAmount: 10, Sets: []domain.SetEntry{{Completed: true, ActualAmount: 10}}},
+	}}
+	if got := DayAverage(exercises, day); !approx(got, 0.5) {
+		t.Fatalf("got %v want 0.5", got)
 	}
 }
 

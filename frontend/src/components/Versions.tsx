@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { RoutineVersion, VersionAssignment, VersionStatus } from "../types";
-import { firstOfMonth, todayISO } from "../format";
+import { dayOf, firstOfMonth, todayISO } from "../format";
 import { toast } from "../toast";
 import { useOnline } from "../useOnline";
 import { ConfirmDialog, Modal } from "./Modal";
@@ -17,7 +17,7 @@ const versionName = (v: RoutineVersion) => v.note?.trim() || fmtDate(v.createdAt
 
 // A short "3 days · 6 exercises" line for a version snapshot.
 const versionShape = (v: RoutineVersion) => {
-  const days = new Set(v.exercises.map((e) => e.timeSlot)).size;
+  const days = new Set(v.exercises.map((e) => dayOf(e))).size;
   const n = v.exercises.length;
   return `${days} day${days === 1 ? "" : "s"} · ${n} exercise${n === 1 ? "" : "s"}`;
 };
