@@ -117,9 +117,16 @@ export function Today({ email }: { email: string }) {
     () => nextWorkoutDay(workoutDayByDate, orderedDays, date),
     [workoutDayByDate, orderedDays, date]
   );
-  // `||` (not `??`) so a stored empty-string workoutDay — how Go serializes the
-  // unset field on a fresh day — falls through to the rotation default.
-  const selectedDay = legacy ? undefined : (override || day?.workoutDay || rotationDefault);
+  // The chosen day must be one that still exists in the routine. A stored or
+  // stamped workoutDay that no longer matches any day (e.g. logged under an
+  // earlier model, or a since-renamed day) is ignored so we fall back to the
+  // rotation default rather than filtering the list down to nothing.
+  const validDay = (d?: string | null): d is string => !!d && orderedDays.includes(d);
+  const selectedDay = legacy
+    ? undefined
+    : validDay(override) ? override
+    : validDay(day?.workoutDay) ? day!.workoutDay
+    : rotationDefault;
 
   // Exercises shown and scored: the selected workout day's subset in rotation
   // mode, or the whole routine on legacy days. If a stored workoutDay no longer

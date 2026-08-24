@@ -262,12 +262,19 @@ input, select { font-family: inherit; color: inherit; }
 .part-head { display: flex; align-items: center; gap: 8px; padding: 9px 15px 5px; }
 .part-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .part-count { font-size: 10.5px; color: var(--ink-3); font-weight: 500; margin-left: auto; }
-.day-ex-row { display: flex; align-items: center; gap: 4px; padding-left: 8px; }
+.day-ex-row { display: flex; align-items: center; gap: 4px; padding-left: 6px; }
 .day-ex-row .day-ex { flex: 1; min-width: 0; }
-.grip { color: var(--ink-3); font-size: 15px; line-height: 1; padding: 6px 4px; flex: none; user-select: none; }
-.grip:active { cursor: grabbing; color: var(--ember); }
-.rdrag { position: relative; z-index: 2; }
-.rdrag > .card, .rdrag > .part, .rdrag > .day-ex-row { box-shadow: var(--shadow); border-radius: 14px; background: var(--surface-2); }
+.grip { color: var(--ink-3); font-size: 16px; line-height: 1; padding: 8px 7px; flex: none; user-select: none; -webkit-user-select: none; border-radius: 8px; }
+.grip:hover { color: var(--ink-2); background: var(--surface-2); }
+.grip:active { cursor: grabbing; color: var(--ember); background: color-mix(in srgb, var(--ember) 12%, transparent); }
+/* Lift the row being dragged; its inner surface gets the elevation. */
+.rdrag { position: relative; z-index: 5; }
+.rdrag > .card, .rdrag > .part, .rdrag > .day-ex-row {
+  box-shadow: var(--shadow); border-radius: 14px;
+  background: var(--surface); outline: 1px solid color-mix(in srgb, var(--ember) 35%, transparent);
+}
+.rdrag > .part { background: var(--surface-2); }
+.rdrag .grip { color: var(--ember); }
 .add-part { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 9px; border: none; border-top: 1px solid var(--line); background: none; color: var(--ink-3); font-weight: 650; font-size: 12.5px; }
 .add-part svg { width: 14px; height: 14px; }
 
