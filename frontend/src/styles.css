@@ -226,6 +226,48 @@ input, select { font-family: inherit; color: inherit; }
 .pillbadge { font-size: 10.5px; font-weight: 650; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
 .pillbadge.done { color: var(--done); background: color-mix(in srgb, var(--done) 15%, transparent); }
 
+/* Routine — plan summary + rotation preview */
+.plan-summary { padding: 15px 16px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 13px; }
+.plan-summary .figs { display: flex; gap: 22px; }
+.plan-summary .fig { display: flex; flex-direction: column; }
+.plan-summary .fig .n { font-size: 21px; font-weight: 800; letter-spacing: -.02em; color: var(--ink); }
+.plan-summary .fig .l { font-size: 10.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; margin-top: 1px; }
+.rotation { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.rotation .rlabel { font-size: 10.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .07em; font-weight: 650; margin-right: 1px; }
+.rot-item { display: inline-flex; align-items: center; gap: 7px; }
+.rchip { font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
+.rarrow { color: var(--ink-3); font-size: 13px; }
+.rloop { color: var(--ember); font-size: 14px; font-weight: 700; }
+
+/* Routine — day-first cards */
+.day-card { margin-top: 14px; overflow: hidden; }
+.day-head { display: flex; align-items: center; gap: 10px; padding: 13px 15px 12px; }
+.day-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; background: currentColor; box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 16%, transparent); }
+.day-name { font-size: 15.5px; font-weight: 780; letter-spacing: -.01em; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.day-spacer { flex: 1; }
+.day-count { font-size: 11px; color: var(--ink-3); font-weight: 500; }
+.day-menu { color: var(--ink-3); font-size: 20px; line-height: 1; letter-spacing: -1px; padding: 0 4px; background: none; border: none; }
+.day-ex { display: flex; align-items: center; gap: 11px; padding: 12px 15px; border-top: 1px solid var(--line); width: 100%; text-align: left; background: none; border-left: none; border-right: none; border-bottom: none; color: var(--ink); }
+.day-ex .dx-body { flex: 1; min-width: 0; }
+.day-ex .dx-name { font-size: 14.5px; font-weight: 700; display: block; }
+.day-ex .dx-meta { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); margin-top: 2px; display: block; }
+.day-ex .dx-chev { color: var(--ink-3); font-size: 17px; flex: none; }
+.add-ex { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 12px; border-top: 1px solid var(--line); width: 100%; background: none; border-left: none; border-right: none; border-bottom: none; color: var(--ember); font-weight: 680; font-size: 13.5px; }
+.add-ex svg { width: 16px; height: 16px; }
+.add-day { margin-top: 16px; width: 100%; padding: 13px; border: 1.5px dashed color-mix(in srgb, var(--ember) 42%, var(--line)); border-radius: 16px; background: transparent; color: var(--ember); font-weight: 720; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.add-day svg { width: 17px; height: 17px; }
+
+/* Versions — grouped sections + save CTA */
+.sec-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 4px 10px; }
+.sec-head .sec-count { font-size: 11px; color: var(--ink-3); font-weight: 500; }
+.save-cta { width: 100%; margin: 2px 0 6px; padding: 15px 16px; border: none; border-radius: 18px; color: #fff; text-align: left; display: flex; align-items: center; gap: 12px; background: radial-gradient(140% 140% at 30% 10%, var(--ember-2), var(--ember)); box-shadow: 0 12px 24px color-mix(in srgb, var(--ember) 34%, transparent); }
+.save-cta .ico { width: 34px; height: 34px; border-radius: 11px; background: rgba(255,255,255,.18); display: grid; place-items: center; flex: none; }
+.save-cta .ico svg { width: 19px; height: 19px; }
+.save-cta .tx { display: flex; flex-direction: column; min-width: 0; }
+.save-cta .tx .t { font-weight: 770; font-size: 14.5px; }
+.save-cta .tx .d { font-size: 12px; opacity: .92; margin-top: 1px; }
+.save-cta:disabled { opacity: .5; }
+
 /* Timeline */
 .tl { position: relative; padding-left: 20px; }
 .tl::before { content: ""; position: absolute; left: 5px; top: 6px; bottom: 10px; width: 2px; background: var(--line); }

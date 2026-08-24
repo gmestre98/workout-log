@@ -5,11 +5,12 @@ import { Today } from "./components/Today";
 import { History } from "./components/History";
 import { Stats } from "./components/Stats";
 import { Routine } from "./components/Routine";
+import { Versions } from "./components/Versions";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { Toaster } from "./components/Toaster";
-import { IconToday, IconHistory, IconStats, IconRoutine } from "./components/icons";
+import { IconToday, IconHistory, IconStats, IconRoutine, IconVersions } from "./components/icons";
 
-type Tab = "today" | "history" | "stats" | "routine";
+type Tab = "today" | "history" | "stats" | "routine" | "versions";
 type AuthState = { status: "loading" } | { status: "out" } | { status: "in"; email: string };
 
 const TABS: { id: Tab; label: string; Icon: (p: { className?: string }) => JSX.Element }[] = [
@@ -17,6 +18,7 @@ const TABS: { id: Tab; label: string; Icon: (p: { className?: string }) => JSX.E
   { id: "history", label: "History", Icon: IconHistory },
   { id: "stats", label: "Stats", Icon: IconStats },
   { id: "routine", label: "Routine", Icon: IconRoutine },
+  { id: "versions", label: "Versions", Icon: IconVersions },
 ];
 
 export function App() {
@@ -46,6 +48,7 @@ export function App() {
         {tab === "history" && <History />}
         {tab === "stats" && <Stats />}
         {tab === "routine" && <Routine />}
+        {tab === "versions" && <Versions />}
       </main>
       {tab === "today" && <InstallPrompt />}
       <Toaster />

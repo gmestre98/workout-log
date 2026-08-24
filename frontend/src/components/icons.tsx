@@ -14,6 +14,9 @@ export const IconStats = (p: P) => (
 export const IconRoutine = (p: P) => (
   <svg viewBox="0 0 24 24" {...s} {...p}><path d="M4 6h16M4 12h16M4 18h10" /></svg>
 );
+export const IconVersions = (p: P) => (
+  <svg viewBox="0 0 24 24" {...s} {...p}><path d="M12 3l9 5-9 5-9-5 9-5z" /><path d="M3 13l9 5 9-5" /></svg>
+);
 export const IconPlus = (p: P) => (
   <svg viewBox="0 0 24 24" {...s} {...p}><path d="M12 5v14M5 12h14" /></svg>
 );
