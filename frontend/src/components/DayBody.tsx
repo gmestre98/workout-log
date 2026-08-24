@@ -71,10 +71,38 @@ export function DayBody({
       ? [...containerRef.current.querySelectorAll<HTMLElement>(":scope > [data-idx]")]
       : [];
 
-  const startUnit = (e: React.PointerEvent, lo: number, hi: number, kind: "ex" | "part") => {
-    if (disabled) return;
-    const rects = rowEls().map((el) => el.getBoundingClientRect());
-    if (rects.length !== rowsRef.current.length) return;
+  // Activation. A row is picked up either immediately from its ⠿ grip, or from
+  // anywhere on the row by press-and-hold (touch) / click-and-move (mouse) — so a
+  // quick tap still edits and a quick swipe still scrolls the list.
+  const HOLD_MS = 200;   // touch hold before a row is picked up
+  const MOVE_TOL = 8;    // px of movement during the hold that means "scrolling"
+  const MOUSE_DIST = 5;  // px of mouse movement that starts a drag
+  const pending = useRef<
+    { el: HTMLElement; pointerId: number; mouse: boolean; startX: number; startY: number; lo: number; hi: number; kind: "ex" | "part"; timer: number } | null
+  >(null);
+  const justDragged = useRef(false);
+  // Non-passive so it can cancel the page scroll while a drag is active. The row
+  // was held still, so no scroll has begun and the touchmove is still cancelable.
+  const preventScroll = useRef((e: TouchEvent) => { if (dragging.current) e.preventDefault(); });
+  useEffect(() => () => document.removeEventListener("touchmove", preventScroll.current), []);
+
+  // The draggable unit for a row: an exercise moves alone; a part header moves
+  // the whole part block. Null when there's nothing to reorder (so taps edit).
+  const unitFor = (i: number): { lo: number; hi: number; kind: "ex" | "part" } | null => {
+    const rws = rowsRef.current;
+    if (rws[i].kind === "header") {
+      if (!canDragPart) return null;
+      let hi = i;
+      while (hi + 1 < rws.length && rws[hi + 1].kind === "ex") hi++;
+      return { lo: i, hi, kind: "part" };
+    }
+    if (!canDragEx) return null;
+    return { lo: i, hi: i, kind: "ex" };
+  };
+
+  const beginDrag = (lo: number, hi: number, kind: "ex" | "part", startY: number, el: HTMLElement, pointerId: number, touch: boolean) => {
+    const rects = rowEls().map((r) => r.getBoundingClientRect());
+    if (rects.length !== rowsRef.current.length) { pending.current = null; return; }
     const gap = rects.length > 1 ? Math.max(0, rects[1].top - rects[0].bottom) : 0;
     const unitH = rects[hi].bottom - rects[lo].top + gap;
     // A part may only be dropped at a part boundary (before another part's header
@@ -86,31 +114,20 @@ export function DayBody({
       for (let i = 1; i < rest.length; i++) if (rest[i].kind === "header") bounds.push(i);
       bounds.push(rest.length);
     }
+    pending.current = null;
     dragging.current = true;
-    setDrag({ lo, hi, kind, startY: e.clientY, dy: 0, ti: lo, unitH, bounds, mids: rects.map((r) => r.top + r.height / 2) });
-    try { (e.currentTarget as Element).setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
+    setDrag({ lo, hi, kind, startY, dy: 0, ti: lo, unitH, bounds, mids: rects.map((r) => r.top + r.height / 2) });
+    try { el.setPointerCapture(pointerId); } catch { /* ignore */ }
+    if (touch) document.addEventListener("touchmove", preventScroll.current, { passive: false });
   };
 
-  const startEx = (e: React.PointerEvent, rowIndex: number) => startUnit(e, rowIndex, rowIndex, "ex");
-
-  // A part header grabs the whole part block: the header plus every exercise row
-  // until the next header (or the end).
-  const startPart = (e: React.PointerEvent, headerIndex: number) => {
-    const rws = rowsRef.current;
-    let hi = headerIndex;
-    while (hi + 1 < rws.length && rws[hi + 1].kind === "ex") hi++;
-    startUnit(e, headerIndex, hi, "part");
-  };
-
-  const move = (e: React.PointerEvent) => {
+  const move = (clientY: number) => {
     setDrag((d) => {
       if (!d) return d;
-      const dy = e.clientY - d.startY;
+      const dy = clientY - d.startY;
       const unitMid = (d.mids[d.lo] + d.mids[d.hi]) / 2 + dy;
       let ti = 0;
-      for (let j = 0; j < d.mids.length; j++) {
-        if ((j < d.lo || j > d.hi) && d.mids[j] < unitMid) ti++;
-      }
+      for (let j = 0; j < d.mids.length; j++) if ((j < d.lo || j > d.hi) && d.mids[j] < unitMid) ti++;
       // Snap a part to the nearest valid boundary so it can't split another part.
       if (d.bounds) ti = d.bounds.reduce((best, b) => (Math.abs(b - ti) < Math.abs(best - ti) ? b : best), d.bounds[0]);
       return { ...d, dy, ti };
@@ -141,12 +158,53 @@ export function DayBody({
     });
   };
 
-  const handle = (onDown: (e: React.PointerEvent) => void) => ({
-    onPointerDown: onDown,
-    onPointerMove: move,
-    onPointerUp: () => end(true),
-    onPointerCancel: () => end(false),
-    style: { touchAction: "none" as const, cursor: disabled ? "default" : "grab" },
+  const finish = (commit: boolean) => {
+    document.removeEventListener("touchmove", preventScroll.current);
+    if (dragging.current) {
+      justDragged.current = true; // swallow the click that follows a drag
+      window.setTimeout(() => { justDragged.current = false; }, 350);
+    }
+    end(commit);
+  };
+
+  const clearPending = () => {
+    if (pending.current) window.clearTimeout(pending.current.timer);
+    pending.current = null;
+  };
+
+  const onDown = (e: React.PointerEvent, i: number) => {
+    if (disabled) return;
+    const t = e.target as HTMLElement;
+    if (t.closest(".pb-add")) return; // the add-exercise button
+    const u = unitFor(i);
+    if (!u) return; // nothing to reorder here — leave the tap for editing
+    const el = e.currentTarget as HTMLElement;
+    const touch = e.pointerType !== "mouse";
+    if (t.closest(".grip")) { beginDrag(u.lo, u.hi, u.kind, e.clientY, el, e.pointerId, touch); return; }
+    const timer = e.pointerType === "mouse" ? 0 : window.setTimeout(() => {
+      const p = pending.current;
+      if (p) beginDrag(p.lo, p.hi, p.kind, p.startY, p.el, p.pointerId, true);
+    }, HOLD_MS);
+    pending.current = { el, pointerId: e.pointerId, mouse: !touch, startX: e.clientX, startY: e.clientY, ...u, timer };
+  };
+
+  const onMove = (e: React.PointerEvent) => {
+    if (dragging.current) { move(e.clientY); return; }
+    const p = pending.current;
+    if (!p) return;
+    const dist = Math.hypot(e.clientX - p.startX, e.clientY - p.startY);
+    if (p.mouse) { if (dist > MOUSE_DIST) beginDrag(p.lo, p.hi, p.kind, p.startY, p.el, p.pointerId, false); }
+    else if (dist > MOVE_TOL) clearPending(); // a swipe: let the list scroll
+  };
+
+  const onUp = () => { if (dragging.current) finish(true); else clearPending(); };
+  const onCancel = () => { if (dragging.current) finish(false); else clearPending(); };
+
+  const rowHandlers = (i: number) => ({
+    onPointerDown: (e: React.PointerEvent) => onDown(e, i),
+    onPointerMove: onMove,
+    onPointerUp: onUp,
+    onPointerCancel: onCancel,
   });
 
   const transformFor = (j: number): React.CSSProperties => {
@@ -167,16 +225,16 @@ export function DayBody({
           return (
             <div key={row.key} data-idx={i} className={isMoving ? "rdrag" : undefined} style={transformFor(i)}>
               {row.kind === "header" ? (
-                <div className="pb-head">
-                  {canDragPart ? <span className="grip" aria-hidden {...handle((e) => startPart(e, i))}>⠿</span> : <span className="grip-sp" />}
+                <div className={`pb-head${canDragPart ? " draggable" : ""}`} {...(canDragPart ? rowHandlers(i) : {})}>
+                  {canDragPart ? <span className="grip" aria-hidden>⠿</span> : <span className="grip-sp" />}
                   <span className="part-title">{row.part || "Unsorted"}</span>
                   <span className="part-count num">{exercises.filter((e) => e.timeSlot === row.part).length}</span>
                   <button className="pb-add" onClick={() => onAddExercise(row.part)} disabled={disabled} aria-label={`Add exercise to ${row.part || "part"}`}><IconPlus /></button>
                 </div>
               ) : (
-                <div className="pb-ex" style={row.ex.active ? undefined : { opacity: 0.5 }}>
-                  {canDragEx ? <span className="grip" aria-hidden {...handle((e) => startEx(e, i))}>⠿</span> : <span className="grip-sp" />}
-                  <button className="day-ex" onClick={() => onEdit(row.ex)} disabled={disabled}>
+                <div className={`pb-ex${canDragEx ? " draggable" : ""}`} style={row.ex.active ? undefined : { opacity: 0.5 }} {...(canDragEx ? rowHandlers(i) : {})}>
+                  {canDragEx ? <span className="grip" aria-hidden>⠿</span> : <span className="grip-sp" />}
+                  <button className="day-ex" onClick={() => { if (justDragged.current) return; onEdit(row.ex); }} disabled={disabled}>
                     <span className="dx-body">
                       <span className="dx-name">{row.ex.name}{!row.ex.active && <span className="pillbadge" style={{ marginLeft: 6 }}>off</span>}</span>
                       <span className="dx-meta">{row.ex.plannedSets} × {row.ex.plannedAmount} {unitSuffix(row.ex.unit)}{row.ex.perSide ? " · per side" : ""}{row.ex.restSeconds > 0 ? ` · ${row.ex.restSeconds}s rest` : ""}</span>
