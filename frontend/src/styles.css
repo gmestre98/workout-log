@@ -256,6 +256,10 @@ input, select { font-family: inherit; color: inherit; }
 .form input, .form select { width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 16px; color: var(--ink); background: var(--surface); }
 .form .row { display: flex; gap: 10px; }
 .form .row label { flex: 1 1 0; min-width: 0; }
+.day-switch { margin: 2px 0 4px; display: flex; flex-direction: column; gap: 8px; }
+.day-switch-head { display: flex; align-items: baseline; justify-content: space-between; }
+.day-switch .slotchips { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
+.day-switch .chip { white-space: nowrap; flex: 0 0 auto; cursor: pointer; }
 .slotchips { display: flex; flex-wrap: wrap; gap: 7px; }
 .slotchips .chip { border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 650; }
 .slotchips .chip.active { border-color: transparent; background: color-mix(in srgb, var(--ember) 16%, transparent); color: var(--ember); }

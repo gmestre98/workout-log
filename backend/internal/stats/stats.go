@@ -35,17 +35,27 @@ func ExerciseCompletion(log domain.ExerciseLog) float64 {
 // one day, as a fraction in [0, 1]. Exercises with no log that day count as 0%,
 // matching the spreadsheet where an untouched exercise drags the day's average
 // down. Returns 0 when there are no exercises.
+//
+// When day.WorkoutDay is set the day is a single workout in the rotation, so
+// only exercises belonging to that workout day (TimeSlot == WorkoutDay) are
+// averaged — otherwise the other days' exercises would count as 0% and cap the
+// score. An empty WorkoutDay (legacy days) averages the whole routine as before.
 func DayAverage(exercises []domain.Exercise, day domain.DayLog) float64 {
-	if len(exercises) == 0 {
-		return 0
-	}
 	var sum float64
+	var n int
 	for _, ex := range exercises {
+		if day.WorkoutDay != "" && ex.TimeSlot != day.WorkoutDay {
+			continue
+		}
+		n++
 		if log, ok := day.Exercises[ex.ID]; ok {
 			sum += ExerciseCompletion(log)
 		}
 	}
-	return sum / float64(len(exercises))
+	if n == 0 {
+		return 0
+	}
+	return sum / float64(n)
 }
 
 // DayStat is a single day's rolled-up completion.

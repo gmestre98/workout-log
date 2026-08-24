@@ -4,7 +4,7 @@ import { getDay, saveDay, subscribeSync, getSyncState, type SyncState } from "..
 import type { DayLog, Exercise, ExerciseLog, RoutineVersion, VersionAssignment } from "../types";
 import {
   addDaysISO, computeStreak, dayCompletion, dayHeader, effectiveVersionId, exerciseCompletion,
-  formatPercent, newLog, routineForDate, setMeta, slotColor, todayISO,
+  formatPercent, newLog, nextWorkoutDay, orderedWorkoutDays, routineForDate, setMeta, slotColor, todayISO,
 } from "../format";
 import { Ring } from "./Ring";
 import { LogSheet } from "./LogSheet";
@@ -32,6 +32,12 @@ export function Today({ email }: { email: string }) {
   const [liveExercises, setLiveExercises] = useState<Exercise[]>([]);
   const [day, setDay] = useState<DayLog | null>(null);
   const [activeDates, setActiveDates] = useState<Set<string>>(new Set());
+  // Which workout day was performed on each recent date, for the rotation
+  // default. Built from the same recent-days fetch that feeds the streak.
+  const [workoutDayByDate, setWorkoutDayByDate] = useState<Map<string, string | undefined>>(new Map());
+  // Manual override of the viewed date's workout day (the day switcher). Cleared
+  // whenever the viewed date changes so each date starts from its own default.
+  const [override, setOverride] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<VersionAssignment[]>([]);
   const [versions, setVersions] = useState<RoutineVersion[]>([]);
   const [sheetFor, setSheetFor] = useState<string | null>(null);
@@ -47,16 +53,25 @@ export function Today({ email }: { email: string }) {
     if (!sync.syncing && sync.pending === 0) setSaving(false);
   }, [sync.syncing, sync.pending]);
 
-  // Streak history (once).
+  // Streak history + recent workout days (once). The same fetch feeds the streak
+  // dots and the rotation default (which workout day was last performed).
   useEffect(() => {
     api.listDays(addDaysISO(today, -90), today)
       .then((days) => {
         const set = new Set<string>();
-        for (const d of days) if (dayHasActivity(d)) set.add(d.date);
+        const wd = new Map<string, string | undefined>();
+        for (const d of days) {
+          if (dayHasActivity(d)) set.add(d.date);
+          wd.set(d.date, d.workoutDay);
+        }
         setActiveDates(set);
+        setWorkoutDayByDate(wd);
       })
       .catch(() => {});
   }, []);
+
+  // Each viewed date starts from its own rotation default; drop any manual pick.
+  useEffect(() => setOverride(null), [date]);
 
   // Schedule + versions, to label which version applied to the viewed date.
   useEffect(() => {
@@ -80,13 +95,42 @@ export function Today({ email }: { email: string }) {
     return () => { cancelled = true; };
   }, [date]);
 
-  // The routine shown for the viewed date: the version scheduled for that date
-  // (so past days render against the routine that was actually in effect then),
-  // falling back to the live routine for the current version or unscheduled days.
-  const exercises = useMemo(
+  // The routine in effect for the viewed date: the version scheduled for that
+  // date (so past days render against the routine that was actually in effect
+  // then), falling back to the live routine for the current version or
+  // unscheduled days.
+  const routineExercises = useMemo(
     () => routineForDate(date, schedule, versions, liveExercises).filter((e) => e.active),
     [date, schedule, versions, liveExercises]
   );
+  const orderedDays = useMemo(() => orderedWorkoutDays(routineExercises), [routineExercises]);
+
+  // A legacy day (logged before rotation existed: has activity, no workoutDay)
+  // keeps showing the whole routine as before. Every other date is a single
+  // workout in the rotation.
+  const legacy = !!day && !day.workoutDay && dayHasActivity(day);
+
+  // The workout day shown for this date: a manual override (the day switcher),
+  // else the one already stored on the day, else the rotation default — the day
+  // after the most recently performed session.
+  const rotationDefault = useMemo(
+    () => nextWorkoutDay(workoutDayByDate, orderedDays, date),
+    [workoutDayByDate, orderedDays, date]
+  );
+  // `||` (not `??`) so a stored empty-string workoutDay — how Go serializes the
+  // unset field on a fresh day — falls through to the rotation default.
+  const selectedDay = legacy ? undefined : (override || day?.workoutDay || rotationDefault);
+
+  // Exercises shown and scored: the selected workout day's subset in rotation
+  // mode, or the whole routine on legacy days. If a stored workoutDay no longer
+  // matches any exercise (label was renamed) but the day has logged work, show
+  // everything so that history stays visible.
+  const exercises = useMemo(() => {
+    if (legacy || !selectedDay) return routineExercises;
+    const subset = routineExercises.filter((e) => e.timeSlot === selectedDay);
+    if (subset.length === 0 && day && dayHasActivity(day)) return routineExercises;
+    return subset;
+  }, [legacy, selectedDay, routineExercises, day]);
 
   const scheduleSave = useCallback((next: DayLog) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -96,6 +140,8 @@ export function Today({ email }: { email: string }) {
       // to the server in the background, so an offline edit is never lost. The
       // streak dots can update immediately off the just-saved state.
       saveDay(next);
+      // Keep the rotation map current so the next session advances correctly.
+      setWorkoutDayByDate((prev) => new Map(prev).set(next.date, next.workoutDay));
       if (next.date === today) {
         setActiveDates((prev) => {
           const s = new Set(prev);
@@ -116,7 +162,27 @@ export function Today({ email }: { email: string }) {
       setDay((prev) => {
         const base = prev ?? { date, exercises: {} };
         const current = base.exercises[ex.id] ?? newLog(ex);
-        const next: DayLog = { date, exercises: { ...base.exercises, [ex.id]: mutate(current) } };
+        // Stamp which workout day this session is (rotation mode) so the date
+        // renders and scores as a single workout. Legacy days keep it empty.
+        const workoutDay = legacy ? base.workoutDay : (selectedDay ?? base.workoutDay);
+        const next: DayLog = { date, workoutDay, exercises: { ...base.exercises, [ex.id]: mutate(current) } };
+        scheduleSave(next);
+        return next;
+      });
+    },
+    [date, scheduleSave, legacy, selectedDay]
+  );
+
+  // chooseDay switches which workout day this session is (the day switcher). It
+  // persists the choice immediately — even before any set is logged — so the
+  // pick sticks across reloads and drives the rotation.
+  const chooseDay = useCallback(
+    (d: string) => {
+      setOverride(d);
+      setDay((prev) => {
+        const base = prev ?? { date, exercises: {} };
+        if (base.workoutDay === d) return base;
+        const next: DayLog = { ...base, date, workoutDay: d };
         scheduleSave(next);
         return next;
       });
@@ -190,6 +256,29 @@ export function Today({ email }: { email: string }) {
       {scheduledVersion && (
         <div className="sched-tag" title="Scheduled workout version for this date (label only)">
           <span className="dot" /> Version: <b>{scheduledLabel}</b>
+        </div>
+      )}
+
+      {!legacy && orderedDays.length > 0 && (
+        <div className="day-switch">
+          <div className="day-switch-head">
+            <span className="slot-title">Workout</span>
+            {selectedDay && !day?.workoutDay && !override && <span className="tiny muted">next up</span>}
+          </div>
+          <div className="slotchips" role="tablist" aria-label="Workout day">
+            {orderedDays.map((d) => (
+              <button
+                key={d}
+                type="button"
+                role="tab"
+                aria-selected={d === selectedDay}
+                className={`chip ${d === selectedDay ? "active" : ""}`}
+                onClick={() => chooseDay(d)}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

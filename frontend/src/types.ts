@@ -34,6 +34,11 @@ export interface ExerciseLog {
 
 export interface DayLog {
   date: string; // YYYY-MM-DD
+  // The workout-day label (an exercise timeSlot) performed on this date, e.g.
+  // "Day 1 — Push". When set, only that day's exercises apply (single-workout
+  // rotation). Empty/absent means a legacy day logged before rotation existed,
+  // which renders and scores against the whole routine as before.
+  workoutDay?: string;
   exercises: Record<string, ExerciseLog>;
 }
 
@@ -70,6 +75,8 @@ export interface VersionAssignment {
 
 export const UNITS: Unit[] = ["reps", "seconds", "minutes"];
 
-// Suggested daily blocks offered as quick-pick chips. The field is free text,
-// so users can rename these or add their own — any number of blocks is allowed.
-export const DEFAULT_TIME_SLOTS = ["Wake up", "Pre lunch", "Afternoon", "Evening", "Night"];
+// Suggested workout-day labels offered as quick-pick chips. The field (an
+// exercise's timeSlot) is free text, so users can rename these or add their own
+// — any number of workout days is allowed, and a label can be as descriptive as
+// "Day 1 — Push". Each session performs one workout day, rotating through them.
+export const DEFAULT_TIME_SLOTS = ["Day 1", "Day 2", "Day 3", "Day 4"];

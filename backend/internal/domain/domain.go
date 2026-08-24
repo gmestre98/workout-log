@@ -72,8 +72,14 @@ type ExerciseLog struct {
 // DayLog is every exercise logged on a single calendar day, keyed by exercise
 // ID. Stored as one document per day.
 type DayLog struct {
-	Date      string                 `json:"date" firestore:"date"` // "YYYY-MM-DD", also the doc ID
-	Exercises map[string]ExerciseLog `json:"exercises" firestore:"exercises"`
+	Date string `json:"date" firestore:"date"` // "YYYY-MM-DD", also the doc ID
+	// WorkoutDay is the workout-day label (an exercise TimeSlot) performed on this
+	// date, e.g. "Day 1 — Push". It is the source of truth for how the date is
+	// shown and scored: when set, only that day's exercises apply (single-workout
+	// rotation); when empty the whole routine applies (legacy days logged before
+	// rotation existed), so old data keeps rendering and averaging as before.
+	WorkoutDay string                 `json:"workoutDay" firestore:"workoutDay"`
+	Exercises  map[string]ExerciseLog `json:"exercises" firestore:"exercises"`
 }
 
 // NewDayLog returns an empty, ready-to-use DayLog for date.

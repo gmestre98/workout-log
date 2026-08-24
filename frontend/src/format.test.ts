@@ -21,6 +21,8 @@ import {
   monthLabel,
   routineForDate,
   setMeta,
+  orderedWorkoutDays,
+  nextWorkoutDay,
 } from "./format";
 import type { DayLog, Exercise } from "./types";
 
@@ -211,6 +213,56 @@ describe("dayCompletion", () => {
     expect(dayCompletion(exs, day("2026-07-01", ["a", "b"]))).toBe(1);
     expect(dayCompletion(exs, undefined)).toBe(0);
     expect(dayCompletion([], day("2026-07-01", []))).toBe(0);
+  });
+
+  it("scopes to the day's workoutDay, ignoring other days' exercises", () => {
+    const exs = [
+      ex("push1", { timeSlot: "Day 1" }), ex("push2", { timeSlot: "Day 1" }),
+      ex("pull1", { timeSlot: "Day 2" }), ex("legs1", { timeSlot: "Day 3" }),
+    ];
+    const d: DayLog = { ...day("2026-08-24", ["push1", "push2"]), workoutDay: "Day 1" };
+    // Both Day 1 exercises done -> 100%, Day 2/3 exercises don't drag it down.
+    expect(dayCompletion(exs, d)).toBe(1);
+    // Legacy day (no workoutDay) averages the whole routine: 2 of 4 done.
+    expect(dayCompletion(exs, day("2026-08-24", ["push1", "push2"]))).toBeCloseTo(0.5);
+  });
+});
+
+describe("orderedWorkoutDays", () => {
+  it("lists distinct labels in first-seen order", () => {
+    const exs = [
+      { timeSlot: "Day 1" }, { timeSlot: "Day 1" },
+      { timeSlot: "Day 2" }, { timeSlot: "Day 3" }, { timeSlot: "Day 2" },
+    ];
+    expect(orderedWorkoutDays(exs)).toEqual(["Day 1", "Day 2", "Day 3"]);
+    expect(orderedWorkoutDays([])).toEqual([]);
+  });
+});
+
+describe("nextWorkoutDay", () => {
+  const days = ["Day 1", "Day 2", "Day 3"];
+  it("advances from the most recent prior session, wrapping around", () => {
+    const map = new Map<string, string | undefined>([["2026-08-22", "Day 3"]]);
+    expect(nextWorkoutDay(map, days, "2026-08-24")).toBe("Day 1");
+    map.set("2026-08-23", "Day 1");
+    expect(nextWorkoutDay(map, days, "2026-08-24")).toBe("Day 2");
+  });
+  it("defaults to the first day with no usable history", () => {
+    expect(nextWorkoutDay(new Map(), days, "2026-08-24")).toBe("Day 1");
+    // Legacy days (no workoutDay) and retired labels are ignored.
+    const map = new Map<string, string | undefined>([
+      ["2026-08-20", undefined], ["2026-08-21", "Old Day"],
+    ]);
+    expect(nextWorkoutDay(map, days, "2026-08-24")).toBe("Day 1");
+  });
+  it("ignores the viewed date and any future dates", () => {
+    const map = new Map<string, string | undefined>([
+      ["2026-08-24", "Day 3"], ["2026-08-25", "Day 3"], ["2026-08-23", "Day 1"],
+    ]);
+    expect(nextWorkoutDay(map, days, "2026-08-24")).toBe("Day 2");
+  });
+  it("returns undefined when there are no workout days", () => {
+    expect(nextWorkoutDay(new Map(), [], "2026-08-24")).toBeUndefined();
   });
 });
 

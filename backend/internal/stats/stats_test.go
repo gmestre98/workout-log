@@ -87,6 +87,31 @@ func TestDayAverageEmptyRoutine(t *testing.T) {
 	}
 }
 
+// With a WorkoutDay set, only that day's exercises are averaged; the other
+// days' exercises are ignored rather than counting as 0% and capping the score.
+func TestDayAverageScopedToWorkoutDay(t *testing.T) {
+	exercises := []domain.Exercise{
+		{ID: "push1", TimeSlot: "Day 1"},
+		{ID: "push2", TimeSlot: "Day 1"},
+		{ID: "pull1", TimeSlot: "Day 2"},
+		{ID: "legs1", TimeSlot: "Day 3"},
+	}
+	day := domain.DayLog{Date: "2026-08-24", WorkoutDay: "Day 1", Exercises: map[string]domain.ExerciseLog{
+		"push1": {PlannedSets: 1, PlannedAmount: 10, Sets: []domain.SetEntry{{Completed: true, ActualAmount: 10}}},
+		"push2": {PlannedSets: 1, PlannedAmount: 10, Sets: []domain.SetEntry{{Completed: true, ActualAmount: 10}}},
+	}}
+	// Both Day 1 exercises done -> 100%, unaffected by the Day 2/3 exercises.
+	if got := DayAverage(exercises, day); !approx(got, 1.0) {
+		t.Fatalf("scoped: got %v want 1.0", got)
+	}
+	// Legacy day (empty WorkoutDay) still averages the whole routine: 2 of 4 done.
+	legacy := day
+	legacy.WorkoutDay = ""
+	if got := DayAverage(exercises, legacy); !approx(got, 0.5) {
+		t.Fatalf("legacy: got %v want 0.5", got)
+	}
+}
+
 func TestSummarize(t *testing.T) {
 	exercises := []domain.Exercise{{ID: "a"}, {ID: "b"}}
 	full := domain.ExerciseLog{PlannedSets: 1, PlannedAmount: 10, Sets: []domain.SetEntry{{Completed: true, ActualAmount: 10}}}

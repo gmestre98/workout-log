@@ -104,15 +104,21 @@ export function setAllSets(log: ExerciseLog, completed: boolean): ExerciseLog {
 }
 
 // dayCompletion mirrors the backend DayAverage: the mean completion across the
-// given (active) exercises for one day; a missing log counts as 0%.
+// given (active) exercises for one day; a missing log counts as 0%. When the day
+// records a workoutDay it is a single workout in the rotation, so only that
+// day's exercises (timeSlot === workoutDay) are averaged — otherwise the other
+// days' exercises would count as 0% and cap the score. A day with no workoutDay
+// (legacy) averages the whole routine as before.
 export function dayCompletion(exercises: Exercise[], day: DayLog | undefined): number {
-  if (exercises.length === 0) return 0;
   let sum = 0;
+  let n = 0;
   for (const ex of exercises) {
+    if (day?.workoutDay && ex.timeSlot !== day.workoutDay) continue;
+    n++;
     const log = day?.exercises[ex.id];
     if (log) sum += exerciseCompletion(log);
   }
-  return sum / exercises.length;
+  return n === 0 ? 0 : sum / n;
 }
 
 // addDaysISO shifts a YYYY-MM-DD date by delta days (local calendar).
@@ -177,12 +183,19 @@ export interface MuscleStat {
 export function muscleBreakdown(exercises: Exercise[], days: DayLog[]): MuscleStat[] {
   const groups = new Map<string, { sum: number; count: number }>();
   for (const ex of exercises) {
+    // Only days on which this exercise's workout was performed count toward its
+    // average: a rotation day (workoutDay set) that isn't this exercise's day
+    // would otherwise drag it down as a 0%. Legacy days (no workoutDay) always
+    // count, matching the whole-routine behaviour.
     let exSum = 0;
+    let n = 0;
     for (const day of days) {
+      if (day.workoutDay && day.workoutDay !== ex.timeSlot) continue;
+      n++;
       const log = day.exercises[ex.id];
       exSum += log ? exerciseCompletion(log) : 0;
     }
-    const exAvg = days.length > 0 ? exSum / days.length : 0;
+    const exAvg = n > 0 ? exSum / n : 0;
     const key = primaryMuscle(ex.muscleGroup);
     const g = groups.get(key) ?? { sum: 0, count: 0 };
     g.sum += exAvg;
@@ -226,6 +239,40 @@ export function routineForDate<E extends { active: boolean; sortOrder: number }>
   const v = versions.find((x) => x.id === vid);
   if (!v || v.exercises.length === 0) return live;
   return [...v.exercises].sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+// orderedWorkoutDays lists the distinct workout-day labels (exercise timeSlots)
+// in the order they first appear, so the rotation has a stable sequence. Pass
+// the routine already sorted by sortOrder (as the API returns it); mirrors the
+// orderedSlots pattern used in the Today/Routine screens.
+export function orderedWorkoutDays(exercises: { timeSlot: string }[]): string[] {
+  const seen: string[] = [];
+  for (const e of exercises) if (e.timeSlot && !seen.includes(e.timeSlot)) seen.push(e.timeSlot);
+  return seen;
+}
+
+// nextWorkoutDay picks the workout day to default to for a session: the one
+// after the most recently performed workout day, wrapping around the ordered
+// list (Day 1 → Day 2 → … → Day 1). "Most recent" is the greatest date strictly
+// before beforeDate that recorded a workoutDay still present in orderedDays;
+// legacy days (no workoutDay) and days for retired labels are ignored. With no
+// such history it returns the first day. Returns undefined only when there are
+// no workout days at all.
+export function nextWorkoutDay(
+  workoutDayByDate: Map<string, string | undefined>,
+  orderedDays: string[],
+  beforeDate: string
+): string | undefined {
+  if (orderedDays.length === 0) return undefined;
+  let lastDate = "";
+  let lastDay = "";
+  for (const [date, wd] of workoutDayByDate) {
+    if (!wd || date >= beforeDate || !orderedDays.includes(wd)) continue;
+    if (date > lastDate) { lastDate = date; lastDay = wd; }
+  }
+  if (!lastDay) return orderedDays[0];
+  const i = orderedDays.indexOf(lastDay);
+  return orderedDays[(i + 1) % orderedDays.length];
 }
 
 // monthLabel formats a YYYY-MM-DD as "Jul 2026".

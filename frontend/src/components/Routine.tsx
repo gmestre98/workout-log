@@ -200,8 +200,8 @@ export function Routine() {
     return seen;
   }, [exercises]);
 
-  // Slots offered as quick-pick chips: the defaults plus any the user already
-  // has, in order — so adding a 4th/5th block is one tap once it exists.
+  // Workout days offered as quick-pick chips: the defaults plus any the user
+  // already has, in order — so reusing an existing day is one tap.
   const knownSlots = useMemo(() => {
     const seen: string[] = [...DEFAULT_TIME_SLOTS];
     for (const e of exercises) if (!seen.includes(e.timeSlot)) seen.push(e.timeSlot);
@@ -601,13 +601,14 @@ function ExerciseForm({
       {error && <p className="error">{error}</p>}
       <form className="form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
         <label>Name<input value={draft.name} onChange={(e) => set("name", e.target.value)} required /></label>
-        <label>Time slot
+        <label>Workout day
           <div className="slotchips">
             {slotOptions.map((s) => (
               <button type="button" key={s} className={`chip ${s === draft.timeSlot ? "active" : ""}`} onClick={() => set("timeSlot", s)}>{s}</button>
             ))}
           </div>
-          <input value={draft.timeSlot} onChange={(e) => set("timeSlot", e.target.value)} placeholder="Type a new block, e.g. Afternoon" required />
+          <input value={draft.timeSlot} onChange={(e) => set("timeSlot", e.target.value)} placeholder="e.g. Day 1 — Push" required />
+          <span className="tiny muted" style={{ fontWeight: 500 }}>Which workout day this exercise belongs to. Each session does one day, rotating through them in order.</span>
         </label>
         <div className="row">
           <label>Sets<input type="number" min={1} value={draft.plannedSets} onChange={(e) => set("plannedSets", Number(e.target.value))} /></label>
