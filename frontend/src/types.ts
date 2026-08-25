@@ -22,6 +22,25 @@ export interface Exercise {
   // When true the exercise is tracked once per side (left/right), so a day log
   // holds 2*plannedSets entries ordered left, right, left, right…
   perSide: boolean;
+  // Optional stand-in performed instead of this exercise while travelling. Absent
+  // when there is no travel replacement. When travel mode is on, an exercise that
+  // has one is shown, logged and scored as its travel variant — under the same
+  // exercise id, so history stays aligned.
+  travel?: TravelVariant | null;
+}
+
+// TravelVariant is the substitute an exercise switches to in travel mode. It
+// overrides the fields that affect doing/logging the movement; the base
+// exercise's id, workout day, time slot, trained parts and order are kept.
+export interface TravelVariant {
+  name: string;
+  plannedSets: number;
+  plannedAmount: number;
+  unit: Unit;
+  note: string;
+  restSeconds: number;
+  equipment: string;
+  perSide: boolean;
 }
 
 export interface SetEntry {
@@ -45,6 +64,10 @@ export interface DayLog {
   // rotation). Empty/absent means a legacy day logged before rotation existed,
   // which renders and scores against the whole routine as before.
   workoutDay?: string;
+  // True when this day was done in travel mode (exercises with a travel
+  // replacement were performed as their variant). A history/export label only —
+  // each ExerciseLog already snapshotted the travel numbers at log time.
+  travel?: boolean;
   exercises: Record<string, ExerciseLog>;
 }
 

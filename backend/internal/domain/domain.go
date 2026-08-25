@@ -53,6 +53,28 @@ type Exercise struct {
 	// squats). When true each planned set is tracked once per side, so a day log
 	// holds 2*PlannedSets entries ordered left, right, left, right…
 	PerSide bool `json:"perSide" firestore:"perSide"`
+	// Travel is an optional stand-in performed instead of this exercise while
+	// travelling (e.g. a bodyweight version of a machine lift). It is nil when the
+	// exercise has no travel replacement. When travel mode is on for a day, an
+	// exercise that has one is displayed, logged and scored as its Travel variant
+	// — under the SAME exercise ID, so history stays aligned and completion still
+	// scores against the day's exercise list.
+	Travel *TravelVariant `json:"travel,omitempty" firestore:"travel,omitempty"`
+}
+
+// TravelVariant is the substitute an exercise switches to in travel mode. It
+// overrides every field that affects doing, logging and scoring the movement;
+// the base exercise's ID, workout day, time slot, trained parts and sort order
+// are kept so the swap is invisible to grouping and history.
+type TravelVariant struct {
+	Name          string `json:"name" firestore:"name"`
+	PlannedSets   int    `json:"plannedSets" firestore:"plannedSets"`
+	PlannedAmount int    `json:"plannedAmount" firestore:"plannedAmount"`
+	Unit          Unit   `json:"unit" firestore:"unit"`
+	Note          string `json:"note" firestore:"note"`
+	RestSeconds   int    `json:"restSeconds" firestore:"restSeconds"`
+	Equipment     string `json:"equipment" firestore:"equipment"`
+	PerSide       bool   `json:"perSide" firestore:"perSide"`
 }
 
 // DefaultWorkoutDay is the day an exercise belongs to when its WorkoutDay is
@@ -99,8 +121,13 @@ type DayLog struct {
 	// shown and scored: when set, only that day's exercises apply (single-workout
 	// rotation); when empty the whole routine applies (legacy days logged before
 	// rotation existed), so old data keeps rendering and averaging as before.
-	WorkoutDay string                 `json:"workoutDay" firestore:"workoutDay"`
-	Exercises  map[string]ExerciseLog `json:"exercises" firestore:"exercises"`
+	WorkoutDay string `json:"workoutDay" firestore:"workoutDay"`
+	// Travel records that this day was performed in travel mode, so exercises that
+	// have a travel replacement were done as their variant. It is a label for
+	// history/export only: completion still scores off each ExerciseLog's own
+	// snapshot, which already captured the travel numbers at log time.
+	Travel    bool                   `json:"travel" firestore:"travel"`
+	Exercises map[string]ExerciseLog `json:"exercises" firestore:"exercises"`
 }
 
 // NewDayLog returns an empty, ready-to-use DayLog for date.

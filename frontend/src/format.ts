@@ -8,6 +8,29 @@ export function dayOf(e: { workoutDay?: string }): string {
   return e.workoutDay ? e.workoutDay : DEFAULT_WORKOUT_DAY;
 }
 
+// applyTravel returns the exercise as it should be performed given the travel-
+// mode flag: when travel mode is on and the exercise has a travel replacement,
+// its movement-defining fields (name, sets, amount, unit, note, rest, per-side,
+// equipment) are swapped for the variant's. Identity and grouping fields (id,
+// workoutDay, timeSlot, muscleGroup, sortOrder, active) are kept, so the swap is
+// invisible to rotation, scoring and history — the log still lives under the
+// same id and snapshots these (travel) numbers at log time.
+export function applyTravel(ex: Exercise, on: boolean): Exercise {
+  const t = ex.travel;
+  if (!on || !t || !t.name) return ex;
+  return {
+    ...ex,
+    name: t.name,
+    plannedSets: t.plannedSets,
+    plannedAmount: t.plannedAmount,
+    unit: t.unit,
+    note: t.note,
+    restSeconds: t.restSeconds,
+    equipment: t.equipment,
+    perSide: t.perSide,
+  };
+}
+
 // exerciseCompletion mirrors the backend: (sum of actual over completed sets) /
 // (number of logged sets * plannedAmount), clamped to [0, 1]. Basing the
 // denominator on the logged set count (not plannedSets) keeps per-side logs —

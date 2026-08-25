@@ -339,7 +339,11 @@ func routineGrid(r routine, days []domain.DayLog) cellGrid {
 		start := int64(len(g.rows))
 		for _, day := range byMonth[m] {
 			row := make([]any, 0, nCols+2)
-			row = append(row, day.Date)
+			date := day.Date
+			if day.Travel {
+				date += " ✈" // mark days done in travel mode
+			}
+			row = append(row, date)
 			for _, e := range r.active {
 				if log, ok := day.Exercises[e.ID]; ok {
 					row = append(row, stats.ExerciseCompletion(log))
@@ -364,16 +368,25 @@ func routineGrid(r routine, days []domain.DayLog) cellGrid {
 func routineConfigGrid(exs []domain.Exercise) cellGrid {
 	rows := [][]any{{
 		"Time slot", "Name", "Sets", "Amount", "Unit", "Rest (s)",
-		"Muscle group", "Equipment", "Per side", "Active", "Note",
+		"Muscle group", "Equipment", "Per side", "Active", "Note", "Travel replacement",
 	}}
 	for _, e := range exs {
 		rows = append(rows, []any{
 			e.TimeSlot, e.Name, e.PlannedSets, e.PlannedAmount, string(e.Unit), e.RestSeconds,
-			e.MuscleGroup, e.Equipment, yesNo(e.PerSide, ""), yesNo(e.Active, "No"), e.Note,
+			e.MuscleGroup, e.Equipment, yesNo(e.PerSide, ""), yesNo(e.Active, "No"), e.Note, travelSummary(e.Travel),
 		})
 	}
 	return cellGrid{title: "Routine", rows: rows, freezeRows: 1,
-		fmts: []rangeFmt{{fmtHeader, 0, 1, 0, 11}}}
+		fmts: []rangeFmt{{fmtHeader, 0, 1, 0, 12}}}
+}
+
+// travelSummary describes an exercise's travel replacement in one cell, e.g.
+// "Wall push-ups (3×15 reps)", or "" when there is none.
+func travelSummary(t *domain.TravelVariant) string {
+	if t == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s (%d×%d %s)", t.Name, t.PlannedSets, t.PlannedAmount, string(t.Unit))
 }
 
 // versionsGrid lists the saved routine snapshots.

@@ -25,6 +25,7 @@ import {
   orderedWorkoutDays,
   orderedParts,
   nextWorkoutDay,
+  applyTravel,
 } from "./format";
 import type { DayLog, Exercise } from "./types";
 
@@ -90,6 +91,45 @@ describe("per-side (setMeta, newLog, completion)", () => {
       { completed: true, actualAmount: 30 }, { completed: false, actualAmount: 30 },
     ];
     expect(exerciseCompletion({ plannedAmount: 30, sets })).toBe(0.5);
+  });
+});
+
+describe("applyTravel", () => {
+  const base = ex("pullups", {
+    name: "Pull-ups", plannedSets: 4, plannedAmount: 8, unit: "reps", note: "wide",
+    restSeconds: 60, equipment: "Pull-up Bar", perSide: false, muscleGroup: "Lats",
+    travel: { name: "Backpack rows", plannedSets: 3, plannedAmount: 15, unit: "reps", note: "each arm", restSeconds: 30, equipment: "Backpack", perSide: true },
+  });
+
+  it("returns the base exercise untouched when travel mode is off", () => {
+    expect(applyTravel(base, false)).toBe(base);
+  });
+
+  it("returns the base exercise when it has no travel replacement", () => {
+    const plain = ex("plank", { travel: null });
+    expect(applyTravel(plain, true)).toBe(plain);
+  });
+
+  it("swaps movement fields for the variant but keeps identity/grouping", () => {
+    const t = applyTravel(base, true);
+    // Movement fields come from the variant.
+    expect(t.name).toBe("Backpack rows");
+    expect(t.plannedSets).toBe(3);
+    expect(t.plannedAmount).toBe(15);
+    expect(t.note).toBe("each arm");
+    expect(t.restSeconds).toBe(30);
+    expect(t.equipment).toBe("Backpack");
+    expect(t.perSide).toBe(true);
+    // Identity and grouping stay with the base, so logs/scoring are unaffected.
+    expect(t.id).toBe("pullups");
+    expect(t.workoutDay).toBe("Day 1");
+    expect(t.timeSlot).toBe("Wake up");
+    expect(t.muscleGroup).toBe("Lats");
+  });
+
+  it("ignores a travel replacement with no name", () => {
+    const noName = ex("x", { travel: { name: "", plannedSets: 1, plannedAmount: 1, unit: "reps", note: "", restSeconds: 0, equipment: "", perSide: false } });
+    expect(applyTravel(noName, true)).toBe(noName);
   });
 });
 

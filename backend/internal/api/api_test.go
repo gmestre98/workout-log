@@ -74,6 +74,59 @@ func TestCreateExerciseValidation(t *testing.T) {
 	}
 }
 
+func TestCreateExerciseWithTravelReplacement(t *testing.T) {
+	srv, _ := newServer()
+	defer srv.Close()
+
+	ex := domain.Exercise{
+		Name: "Pull-ups", TimeSlot: "Wake up", Unit: domain.UnitReps, PlannedSets: 4, PlannedAmount: 8, Active: true,
+		Travel: &domain.TravelVariant{Name: "Backpack rows", PlannedSets: 3, PlannedAmount: 15, Unit: domain.UnitReps, PerSide: true},
+	}
+	resp := do(t, http.MethodPost, srv.URL+"/api/exercises", ex)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create: got %d", resp.StatusCode)
+	}
+	var created domain.Exercise
+	json.NewDecoder(resp.Body).Decode(&created)
+	resp.Body.Close()
+	if created.Travel == nil || created.Travel.Name != "Backpack rows" || !created.Travel.PerSide {
+		t.Fatalf("travel replacement not round-tripped: %+v", created.Travel)
+	}
+}
+
+func TestCreateExerciseInvalidTravelReplacement(t *testing.T) {
+	srv, _ := newServer()
+	defer srv.Close()
+	// A travel replacement is present but unnamed → rejected.
+	bad := domain.Exercise{
+		Name: "Pull-ups", TimeSlot: "Wake up", Unit: domain.UnitReps, PlannedSets: 4, PlannedAmount: 8,
+		Travel: &domain.TravelVariant{Name: "", PlannedSets: 3, PlannedAmount: 15, Unit: domain.UnitReps},
+	}
+	resp := do(t, http.MethodPost, srv.URL+"/api/exercises", bad)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("got %d want 400", resp.StatusCode)
+	}
+}
+
+func TestSaveDayTravelFlag(t *testing.T) {
+	srv, _ := newServer()
+	defer srv.Close()
+	day := domain.DayLog{Travel: true, Exercises: map[string]domain.ExerciseLog{
+		"ex-1": {ExerciseID: "ex-1", PlannedSets: 1, PlannedAmount: 10, Unit: domain.UnitReps,
+			Sets: []domain.SetEntry{{Completed: true, ActualAmount: 10}}},
+	}}
+	resp := do(t, http.MethodPut, srv.URL+"/api/days/2026-07-18", day)
+	resp.Body.Close()
+	resp = do(t, http.MethodGet, srv.URL+"/api/days/2026-07-18", nil)
+	var got domain.DayLog
+	json.NewDecoder(resp.Body).Decode(&got)
+	resp.Body.Close()
+	if !got.Travel {
+		t.Fatalf("travel flag not persisted: %+v", got)
+	}
+}
+
 func TestGetMissingExercise404(t *testing.T) {
 	srv, _ := newServer()
 	defer srv.Close()

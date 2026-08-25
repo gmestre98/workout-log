@@ -150,6 +150,20 @@ func validateExercise(e domain.Exercise) string {
 	if e.PlannedAmount <= 0 {
 		return "plannedAmount must be > 0"
 	}
+	if t := e.Travel; t != nil {
+		if t.Name == "" {
+			return "travel replacement name is required"
+		}
+		if !t.Unit.Valid() {
+			return "travel unit must be reps, seconds or minutes"
+		}
+		if t.PlannedSets <= 0 {
+			return "travel plannedSets must be > 0"
+		}
+		if t.PlannedAmount <= 0 {
+			return "travel plannedAmount must be > 0"
+		}
+	}
 	return ""
 }
 

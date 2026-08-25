@@ -3,9 +3,10 @@ import { api } from "../api";
 import { getDay, saveDay, subscribeSync, getSyncState, type SyncState } from "../dayStore";
 import type { DayLog, Exercise, ExerciseLog, RoutineVersion, VersionAssignment } from "../types";
 import {
-  addDaysISO, computeStreak, dayCompletion, dayHeader, dayOf, effectiveVersionId, exerciseCompletion,
+  addDaysISO, applyTravel, computeStreak, dayCompletion, dayHeader, dayOf, effectiveVersionId, exerciseCompletion,
   formatPercent, newLog, nextWorkoutDay, orderedWorkoutDays, routineForDate, setMeta, slotColor, todayISO,
 } from "../format";
+import { getTravelMode, setTravelMode } from "../travel";
 import { Ring } from "./Ring";
 import { LogSheet } from "./LogSheet";
 import { WorkoutClock } from "./WorkoutClock";
@@ -38,6 +39,10 @@ export function Today({ email }: { email: string }) {
   // Manual override of the viewed date's workout day (the day switcher). Cleared
   // whenever the viewed date changes so each date starts from its own default.
   const [override, setOverride] = useState<string | null>(null);
+  // Travel mode: a global switch (persisted on the device) that swaps every
+  // exercise with a travel replacement for its variant. Already-logged days
+  // instead honour the travel flag stamped on them, so history is authoritative.
+  const [travelMode, setTravel] = useState(getTravelMode);
   const [schedule, setSchedule] = useState<VersionAssignment[]>([]);
   const [versions, setVersions] = useState<RoutineVersion[]>([]);
   const [sheetFor, setSheetFor] = useState<string | null>(null);
@@ -128,16 +133,35 @@ export function Today({ email }: { email: string }) {
     : validDay(day?.workoutDay) ? day!.workoutDay
     : rotationDefault;
 
-  // Exercises shown and scored: the selected workout day's subset in rotation
-  // mode, or the whole routine on legacy days. If a stored workoutDay no longer
-  // matches any exercise (label was renamed) but the day has logged work, show
-  // everything so that history stays visible.
-  const exercises = useMemo(() => {
+  // Exercises for the selected workout day (the subset in rotation mode, or the
+  // whole routine on legacy days). If a stored workoutDay no longer matches any
+  // exercise (label was renamed) but the day has logged work, show everything so
+  // that history stays visible. These are the base exercises, before travel-mode
+  // substitution.
+  const dayExercises = useMemo(() => {
     if (legacy || !selectedDay) return routineExercises;
     const subset = routineExercises.filter((e) => dayOf(e) === selectedDay);
     if (subset.length === 0 && day && dayHasActivity(day)) return routineExercises;
     return subset;
   }, [legacy, selectedDay, routineExercises, day]);
+
+  // Whether travel versions apply to the viewed date: an already-logged day
+  // honours the travel flag it was stamped with; an unlogged day follows the
+  // global travel switch. So past days always render as they were performed.
+  const dayLogged = !!day && dayHasActivity(day);
+  const useTravel = dayLogged ? !!day?.travel : travelMode;
+  const travelCount = useMemo(
+    () => dayExercises.filter((e) => e.travel && e.travel.name).length,
+    [dayExercises]
+  );
+
+  // What's actually shown, logged and scored: each exercise swapped for its
+  // travel variant when travel mode applies (kept under the same id, so logs and
+  // scoring are unaffected).
+  const exercises = useMemo(
+    () => dayExercises.map((e) => applyTravel(e, useTravel)),
+    [dayExercises, useTravel]
+  );
 
   const scheduleSave = useCallback((next: DayLog) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -172,12 +196,15 @@ export function Today({ email }: { email: string }) {
         // Stamp which workout day this session is (rotation mode) so the date
         // renders and scores as a single workout. Legacy days keep it empty.
         const workoutDay = legacy ? base.workoutDay : (selectedDay ?? base.workoutDay);
-        const next: DayLog = { date, workoutDay, exercises: { ...base.exercises, [ex.id]: mutate(current) } };
+        // Stamp travel mode so the day is recorded as (and keeps rendering as) a
+        // travel session. ex is already the effective (travel) exercise, so its
+        // log below snapshots the travel numbers.
+        const next: DayLog = { date, workoutDay, travel: useTravel, exercises: { ...base.exercises, [ex.id]: mutate(current) } };
         scheduleSave(next);
         return next;
       });
     },
-    [date, scheduleSave, legacy, selectedDay]
+    [date, scheduleSave, legacy, selectedDay, useTravel]
   );
 
   // chooseDay switches which workout day this session is (the day switcher). It
@@ -190,6 +217,25 @@ export function Today({ email }: { email: string }) {
         const base = prev ?? { date, exercises: {} };
         if (base.workoutDay === d) return base;
         const next: DayLog = { ...base, date, workoutDay: d };
+        scheduleSave(next);
+        return next;
+      });
+    },
+    [date, scheduleSave]
+  );
+
+  // chooseTravel flips travel mode. It updates the global switch, which persists
+  // across days and reloads and drives the display of any not-yet-logged day (so
+  // the swap takes effect immediately without writing an empty day record). An
+  // already-logged day is instead re-stamped and saved, since its own flag — not
+  // the global switch — is what its display follows.
+  const chooseTravel = useCallback(
+    (on: boolean) => {
+      setTravelMode(on);
+      setTravel(on);
+      setDay((prev) => {
+        if (!prev || !dayHasActivity(prev) || !!prev.travel === on) return prev;
+        const next: DayLog = { ...prev, date, travel: on };
         scheduleSave(next);
         return next;
       });
@@ -287,6 +333,28 @@ export function Today({ email }: { email: string }) {
             ))}
           </div>
         </div>
+      )}
+
+      {travelCount > 0 && (
+        <label className={`travel-bar ${useTravel ? "on" : ""}`}>
+          <span className="tb-ic" aria-hidden>✈</span>
+          <span className="tb-txt">
+            <span className="tb-title">Travel mode</span>
+            <span className="tb-sub">
+              {useTravel
+                ? `${travelCount} exercise${travelCount === 1 ? "" : "s"} swapped for travel versions`
+                : `${travelCount} exercise${travelCount === 1 ? "" : "s"} have a travel version`}
+            </span>
+          </span>
+          <span className="tb-switch" aria-hidden><span className="tb-knob" /></span>
+          <input
+            type="checkbox"
+            className="tb-input"
+            checked={useTravel}
+            onChange={(e) => chooseTravel(e.target.checked)}
+            aria-label="Travel mode"
+          />
+        </label>
       )}
 
       <div className="card" style={{ padding: 16 }}>

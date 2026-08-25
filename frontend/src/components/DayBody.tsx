@@ -242,6 +242,7 @@ export function DayBody({
                       <span className="dx-name">{row.ex.name}{!row.ex.active && <span className="pillbadge" style={{ marginLeft: 6 }}>off</span>}</span>
                       <span className="dx-meta">{row.ex.plannedSets} × {row.ex.plannedAmount} {unitSuffix(row.ex.unit)}{row.ex.perSide ? " · per side" : ""}{row.ex.restSeconds > 0 ? ` · ${row.ex.restSeconds}s rest` : ""}</span>
                     </span>
+                    {row.ex.travel?.name && <span className="pillbadge" title={`Travel: ${row.ex.travel.name}`}>✈</span>}
                     {row.ex.muscleGroup && <span className="pillbadge">{primaryMuscle(row.ex.muscleGroup)}</span>}
                     <span className="dx-chev">›</span>
                   </button>

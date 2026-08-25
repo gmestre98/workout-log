@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { Exercise, Unit } from "../types";
+import type { Exercise, TravelVariant, Unit } from "../types";
 import { MUSCLE_GROUPS, EQUIPMENT_OPTIONS, UNITS } from "../types";
 import { dayOf, orderedParts, orderedWorkoutDays, slotColor } from "../format";
 import { toast } from "../toast";
@@ -320,6 +320,17 @@ function ExerciseForm({
   // Predefined options first, then anything used elsewhere in the routine.
   const muscleOptions = [...new Set([...MUSCLE_GROUPS, ...knownMuscles])];
   const equipmentOptions = [...new Set([...EQUIPMENT_OPTIONS, ...knownEquipment])];
+  // Travel replacement (optional). Toggling it on seeds the variant from the base
+  // exercise's numbers so only the differences need editing; toggling off clears
+  // it (null → the exercise has no travel replacement).
+  const travel = draft.travel ?? null;
+  const setT = <K extends keyof TravelVariant>(key: K, value: TravelVariant[K]) =>
+    set("travel", { ...(travel as TravelVariant), [key]: value });
+  const toggleTravel = (on: boolean) =>
+    set("travel", on
+      ? { name: "", plannedSets: draft.plannedSets, plannedAmount: draft.plannedAmount,
+          unit: draft.unit, note: "", restSeconds: draft.restSeconds, equipment: draft.equipment, perSide: draft.perSide }
+      : null);
   return (
     <div>
       <div className="app-head">
@@ -388,6 +399,37 @@ function ExerciseForm({
         </label>
         <label className="check"><input type="checkbox" checked={draft.perSide} onChange={(e) => set("perSide", e.target.checked)} />Left / right sides (e.g. side plank, split squats)</label>
         {draft.perSide && <p className="tiny muted" style={{ margin: "-6px 2px 0" }}>Each set is logged for both sides — {draft.plannedSets} × {draft.plannedAmount} {draft.unit === "reps" ? "reps" : draft.unit === "seconds" ? "s" : "min"} per side.</p>}
+
+        <label className="check"><input type="checkbox" checked={!!travel} onChange={(e) => toggleTravel(e.target.checked)} />✈ Travel replacement (used when Travel mode is on)</label>
+        {travel && (
+          <div className="travel-edit">
+            <p className="tiny muted" style={{ margin: "0 0 2px" }}>The version you'll do instead while travelling. Logged under this exercise, so your history and stats stay continuous.</p>
+            <label>Travel exercise name
+              <input value={travel.name} onChange={(e) => setT("name", e.target.value)} placeholder="e.g. Wall push-ups" required />
+            </label>
+            <div className="row">
+              <label>Sets<input type="number" min={1} value={travel.plannedSets} onChange={(e) => setT("plannedSets", Number(e.target.value))} /></label>
+              <label>Amount / set<input type="number" min={1} value={travel.plannedAmount} onChange={(e) => setT("plannedAmount", Number(e.target.value))} /></label>
+              <label>Unit
+                <select value={travel.unit} onChange={(e) => setT("unit", e.target.value as Unit)}>
+                  {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </label>
+            </div>
+            <label>Note<input value={travel.note} onChange={(e) => setT("note", e.target.value)} placeholder="optional" /></label>
+            <label>Rest between sets (seconds)<input type="number" min={0} value={travel.restSeconds} onChange={(e) => setT("restSeconds", Number(e.target.value))} /></label>
+            <label>Equipment <span className="muted" style={{ fontWeight: 500 }}>(tap to select — several allowed)</span>
+              <ChipSelect
+                values={parseList(travel.equipment)}
+                onChange={(v) => setT("equipment", v.join(", "))}
+                options={equipmentOptions}
+                addPlaceholder="Add other equipment…"
+              />
+            </label>
+            <label className="check"><input type="checkbox" checked={travel.perSide} onChange={(e) => setT("perSide", e.target.checked)} />Left / right sides</label>
+          </div>
+        )}
+
         <label className="check"><input type="checkbox" checked={draft.active} onChange={(e) => set("active", e.target.checked)} />Active (shown in daily tracking)</label>
         <div className="formbtns">
           <button type="button" className="btn ghost" onClick={onCancel}>Cancel</button>

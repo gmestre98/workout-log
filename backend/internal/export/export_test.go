@@ -186,6 +186,20 @@ func TestRoutineConfigGridFields(t *testing.T) {
 	if got[1] != "Plank" || got[4] != "seconds" || got[8] != "Yes" || got[9] != "No" || got[10] != "slow" {
 		t.Fatalf("routine config row = %+v", got)
 	}
+	if got[11] != "" {
+		t.Fatalf("travel column should be empty for a plain exercise, got %v", got[11])
+	}
+}
+
+func TestRoutineConfigGridTravelColumn(t *testing.T) {
+	e := domain.Exercise{
+		ID: "a", TimeSlot: "Main", Name: "Pull-ups", PlannedSets: 4, PlannedAmount: 8, Unit: domain.UnitReps, Active: true,
+		Travel: &domain.TravelVariant{Name: "Backpack rows", PlannedSets: 3, PlannedAmount: 15, Unit: domain.UnitReps},
+	}
+	g := routineConfigGrid([]domain.Exercise{e})
+	if got := g.rows[1][11]; got != "Backpack rows (3×15 reps)" {
+		t.Fatalf("travel column = %v", got)
+	}
 }
 
 func TestBuildGridsShape(t *testing.T) {
