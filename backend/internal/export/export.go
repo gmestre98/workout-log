@@ -4,10 +4,15 @@
 //
 // Layout: a Summary tab (per-month rollups), then one tab per saved routine
 // ("workout") holding one daily-completion table per month, then a Routine tab
-// (the current config) and a Versions tab. Each day is attributed to the
-// routine whose exercises it best matches (see attribute), so days logged under
-// an old routine are scored against that routine — not left at 0% against the
-// current one.
+// (the current config) and a Versions tab. Routine tabs run in chronological
+// order and are titled by the month-year span they cover (e.g. "May–Jul 2026").
+//
+// Each day is attributed to a routine by the version schedule (the effective-
+// dated VersionAssignment timeline): the routine a day belongs to is the version
+// scheduled for that date. Days that predate the schedule fall back to matching
+// the routine whose exercises they best fit (see attribute), so days logged
+// under an old, unscheduled routine are still scored against that routine — not
+// left at 0% against the current one.
 package export
 
 import (
@@ -28,15 +33,17 @@ import (
 // Data is everything the export needs: the current routine, every day log
 // (chronological), and the saved routine versions.
 type Data struct {
-	Exercises []domain.Exercise
-	Days      []domain.DayLog
-	Versions  []domain.RoutineVersion
-	Generated time.Time
+	Exercises   []domain.Exercise
+	Days        []domain.DayLog
+	Versions    []domain.RoutineVersion
+	Assignments []domain.VersionAssignment // the version schedule (effective-dated)
+	Generated   time.Time
 }
 
 // routine is one "workout": a set of exercises (from a saved version, or the
 // live routine as a fallback) that days can be attributed to and scored against.
 type routine struct {
+	id        string // saved-version ID, for schedule attribution ("" for the fallback)
 	name      string
 	active    []domain.Exercise
 	ids       map[string]bool // active exercise IDs, for attribution
@@ -81,6 +88,7 @@ func buildRoutines(d Data) []routine {
 	for _, v := range d.Versions {
 		active := activeExercises(v.Exercises)
 		routines = append(routines, routine{
+			id:        v.ID,
 			name:      versionName(v),
 			active:    active,
 			ids:       idSet(active),
@@ -142,6 +150,37 @@ func attribute(day domain.DayLog, routines []routine) int {
 		}
 	}
 	return best
+}
+
+// scheduleAttributor returns a function mapping a day's date to a routine index
+// using the version schedule: the version in effect on a date is the assignment
+// with the greatest StartDate <= date (see domain.VersionAssignment). It returns
+// (idx, true) when the schedule covers the date and its version maps to a known
+// routine; otherwise (_, false) so the caller can fall back to exercise
+// matching (e.g. for days that predate the earliest assignment).
+func scheduleAttributor(assignments []domain.VersionAssignment, routines []routine) func(date string) (int, bool) {
+	idxByVersion := make(map[string]int, len(routines))
+	for i, r := range routines {
+		if r.id != "" {
+			idxByVersion[r.id] = i
+		}
+	}
+	sorted := append([]domain.VersionAssignment(nil), assignments...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].StartDate < sorted[j].StartDate })
+	return func(date string) (int, bool) {
+		vid := ""
+		for _, a := range sorted {
+			if a.StartDate > date {
+				break
+			}
+			vid = a.VersionID // latest assignment on or before the date wins
+		}
+		if vid == "" {
+			return 0, false
+		}
+		idx, ok := idxByVersion[vid]
+		return idx, ok
+	}
 }
 
 // dayCompletion is a day's average completion scored against its attributed
@@ -306,12 +345,29 @@ func versionsGrid(vs []domain.RoutineVersion) cellGrid {
 // sanitised and de-duplicated for the Sheets API.
 func buildGrids(d Data) []cellGrid {
 	routines := buildRoutines(d)
+	sched := scheduleAttributor(d.Assignments, routines)
 	attr := make(map[string]int, len(d.Days))
 	for _, day := range d.Days {
-		attr[day.Date] = attribute(day, routines)
+		switch {
+		case len(day.Exercises) == 0:
+			attr[day.Date] = -1 // nothing logged: not part of any routine tab
+		default:
+			if idx, ok := sched(day.Date); ok {
+				attr[day.Date] = idx // scheduled version wins
+			} else {
+				attr[day.Date] = attribute(day, routines) // pre-schedule fallback
+			}
+		}
 	}
 
-	grids := []cellGrid{summaryGrid(d, routines, attr)}
+	// Collect the routine tabs to emit (skip empty historical routines; keep the
+	// current one even when empty), then order them chronologically by their
+	// first logged day. Empty tabs sort last.
+	type routineTab struct {
+		r    routine
+		days []domain.DayLog
+	}
+	var tabs []routineTab
 	for i, r := range routines {
 		var days []domain.DayLog
 		for _, day := range d.Days {
@@ -320,14 +376,73 @@ func buildGrids(d Data) []cellGrid {
 			}
 		}
 		if len(days) == 0 && !r.current {
-			continue // skip empty historical routines; keep the current one
+			continue
 		}
-		grids = append(grids, routineGrid(r, days))
+		tabs = append(tabs, routineTab{r, days})
+	}
+	sort.SliceStable(tabs, func(i, j int) bool {
+		di, dj := firstDate(tabs[i].days), firstDate(tabs[j].days)
+		switch {
+		case di == "" && dj == "":
+			return false
+		case di == "":
+			return false // i empty → sorts after j
+		case dj == "":
+			return true // j empty → i sorts before
+		default:
+			return di < dj
+		}
+	})
+
+	grids := []cellGrid{summaryGrid(d, routines, attr)}
+	for _, t := range tabs {
+		g := routineGrid(t.r, t.days)
+		g.title = routineTabTitle(t.r, t.days)
+		grids = append(grids, g)
 	}
 	grids = append(grids, routineConfigGrid(d.Exercises), versionsGrid(d.Versions))
 
 	dedupeTitles(grids)
 	return grids
+}
+
+// firstDate is the earliest day's date in a chronologically-sorted slice, or ""
+// when there are none.
+func firstDate(days []domain.DayLog) string {
+	if len(days) == 0 {
+		return ""
+	}
+	return days[0].Date
+}
+
+// routineTabTitle names a routine's tab by the month-year span of the days it
+// holds (e.g. "May–Jul 2026", or "May 2026" for a single month). A routine with
+// no days yet (the current/future one) falls back to its version name.
+func routineTabTitle(r routine, days []domain.DayLog) string {
+	if len(days) == 0 {
+		return r.name
+	}
+	return monthSpanLabel(days[0].Date, days[len(days)-1].Date)
+}
+
+// monthSpanLabel turns a [min,max] date range ("YYYY-MM-DD") into a compact
+// month-year label: "May 2026" (one month), "May–Jul 2026" (same year), or
+// "Nov 2025 – Feb 2026" (spanning years). Falls back to the raw min on a parse
+// error.
+func monthSpanLabel(minDate, maxDate string) string {
+	lo, errLo := time.Parse("2006-01-02", minDate)
+	hi, errHi := time.Parse("2006-01-02", maxDate)
+	if errLo != nil || errHi != nil {
+		return minDate
+	}
+	switch {
+	case lo.Year() == hi.Year() && lo.Month() == hi.Month():
+		return lo.Format("January 2006")
+	case lo.Year() == hi.Year():
+		return fmt.Sprintf("%s–%s", lo.Format("Jan"), hi.Format("Jan 2006"))
+	default:
+		return fmt.Sprintf("%s – %s", lo.Format("Jan 2006"), hi.Format("Jan 2006"))
+	}
 }
 
 // dedupeTitles sanitises each grid title and makes them unique (case-insensitive),

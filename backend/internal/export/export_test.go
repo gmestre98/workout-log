@@ -202,8 +202,65 @@ func TestBuildGridsShape(t *testing.T) {
 	if len(grids) != 4 {
 		t.Fatalf("grids = %d, want 4: %v", len(grids), titles(grids))
 	}
-	if grids[0].title != "Summary" || grids[1].title != "Cur" {
+	// The routine tab is titled by the month-year span of its days, not the note.
+	if grids[0].title != "Summary" || grids[1].title != "March 2026" {
 		t.Fatalf("grid titles = %v", titles(grids))
+	}
+}
+
+func TestMonthSpanLabel(t *testing.T) {
+	cases := []struct{ lo, hi, want string }{
+		{"2026-05-03", "2026-05-28", "May 2026"},
+		{"2026-05-03", "2026-07-20", "May–Jul 2026"},
+		{"2025-11-10", "2026-02-05", "Nov 2025 – Feb 2026"},
+		{"bad", "2026-02-05", "bad"},
+	}
+	for _, c := range cases {
+		if got := monthSpanLabel(c.lo, c.hi); got != c.want {
+			t.Fatalf("monthSpanLabel(%q,%q) = %q, want %q", c.lo, c.hi, got, c.want)
+		}
+	}
+}
+
+// Days are filed to the version the schedule says was in effect on their date —
+// not to whichever routine's exercises they happen to overlap. This is the fix
+// for a routine's tab showing days from other months.
+func TestScheduleAttributionByDate(t *testing.T) {
+	// Two versions sharing the SAME exercises, so exercise-matching alone can't
+	// tell them apart; only the schedule (by date) can.
+	may := domain.RoutineVersion{
+		ID: "vMay", CreatedAt: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC),
+		Note: "may-july routine", Status: domain.StatusPast,
+		Exercises: []domain.Exercise{ex("a", "A"), ex("b", "B")},
+	}
+	aug := domain.RoutineVersion{
+		ID: "vAug", CreatedAt: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC),
+		Note: "august routine", Status: domain.StatusCurrent,
+		Exercises: []domain.Exercise{ex("a", "A"), ex("b", "B")},
+	}
+	d := Data{
+		Versions: []domain.RoutineVersion{may, aug},
+		Assignments: []domain.VersionAssignment{
+			{StartDate: "2026-05-01", VersionID: "vMay"},
+			{StartDate: "2026-08-01", VersionID: "vAug"},
+		},
+		Days: []domain.DayLog{
+			day("2026-06-15", "a", "b"), // May routine period
+			day("2026-08-10", "a", "b"), // Aug routine period
+		},
+	}
+	grids := buildGrids(d)
+	// Summary + two routine tabs (chronological) + Routine + Versions.
+	if len(grids) != 5 {
+		t.Fatalf("grids = %d, want 5: %v", len(grids), titles(grids))
+	}
+	if grids[1].title != "June 2026" || grids[2].title != "August 2026" {
+		t.Fatalf("routine tab titles = %v, want June 2026 then August 2026", titles(grids))
+	}
+	// The August day must not appear in the May-routine tab: one month section is
+	// a title row, a header row, one data row, and a blank separator = 4 rows.
+	if n := len(grids[1].rows); n != 4 {
+		t.Fatalf("June tab rows = %d, want 4 (no bleed-through)", n)
 	}
 }
 

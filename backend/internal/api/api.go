@@ -103,12 +103,18 @@ func (h *Handler) exportSheets(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	assignments, err := h.store.ListVersionAssignments(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	url, title, err := export.Run(r.Context(), svc, export.Data{
-		Exercises: exercises,
-		Days:      days,
-		Versions:  versions,
-		Generated: time.Now().UTC(),
+		Exercises:   exercises,
+		Days:        days,
+		Versions:    versions,
+		Assignments: assignments,
+		Generated:   time.Now().UTC(),
 	})
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, "export failed: "+err.Error())
