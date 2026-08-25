@@ -8,16 +8,16 @@ import { useOnline } from "../useOnline";
 import { ConfirmDialog, Modal } from "./Modal";
 import { ReorderList } from "./Reorder";
 import { DayBody } from "./DayBody";
-import { ComboBox, MultiCombo } from "./Combo";
+import { ComboBox, ChipSelect } from "./Combo";
 import { IconPlus } from "./icons";
 
 type Draft = Omit<Exercise, "id"> & { id?: string };
 
-// parseMuscles splits a stored muscleGroup into the multi-select's chips. It
-// breaks on top-level commas only, so a legacy parenthetical stays whole:
-// "Back, Biceps" → ["Back", "Biceps"] but
+// parseList splits a stored comma-joined field (muscleGroup / equipment) into
+// the chip list. It breaks on top-level commas only, so a legacy parenthetical
+// stays whole: "Back, Biceps" → ["Back", "Biceps"] but
 // "Legs (Quads, Glutes)" → ["Legs (Quads, Glutes)"].
-const parseMuscles = (s: string): string[] => {
+const parseList = (s: string): string[] => {
   const out: string[] = [];
   let depth = 0, cur = "";
   for (const ch of s) {
@@ -29,6 +29,15 @@ const parseMuscles = (s: string): string[] => {
   const t = cur.trim();
   if (t) out.push(t);
   return out;
+};
+
+// distinctFrom collects the distinct entries used across the routine for a
+// comma-joined field, so muscles/equipment you've added before resurface as
+// suggestions on the next exercise.
+const distinctFrom = (exercises: Exercise[], pick: (e: Exercise) => string): string[] => {
+  const seen: string[] = [];
+  for (const e of exercises) for (const v of parseList(pick(e))) if (!seen.includes(v)) seen.push(v);
+  return seen;
 };
 
 // A blank exercise. workoutDay and timeSlot carry no baked-in default — the day
@@ -150,6 +159,8 @@ export function Routine() {
         setDraft={setDraft}
         knownDays={days}
         knownParts={orderedParts(exercises)}
+        knownMuscles={distinctFrom(exercises, (e) => e.muscleGroup)}
+        knownEquipment={distinctFrom(exercises, (e) => e.equipment)}
         onSave={save}
         onCancel={() => setDraft(null)}
         onDelete={draft.id ? async () => { await remove(draft as Exercise); setDraft(null); } : undefined}
@@ -297,13 +308,18 @@ function RenameDayDialog({
 }
 
 function ExerciseForm({
-  draft, setDraft, knownDays, knownParts, onSave, onCancel, onDelete, error, offline,
-}: { draft: Draft; setDraft: (d: Draft) => void; knownDays: string[]; knownParts: string[]; onSave: () => void; onCancel: () => void; onDelete?: () => void; error: string; offline?: boolean }) {
+  draft, setDraft, knownDays, knownParts, knownMuscles, knownEquipment, onSave, onCancel, onDelete, error, offline,
+}: { draft: Draft; setDraft: (d: Draft) => void; knownDays: string[]; knownParts: string[]; knownMuscles: string[]; knownEquipment: string[]; onSave: () => void; onCancel: () => void; onDelete?: () => void; error: string; offline?: boolean }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft({ ...draft, [key]: value });
-  // muscleGroup is stored comma-joined; expose it to the multi-select as a list
-  // (top-level commas only, so a legacy "Legs (Quads, Glutes)" stays one chip).
-  const muscles = parseMuscles(draft.muscleGroup);
+  // muscleGroup and equipment are stored comma-joined; expose them to the
+  // chip selects as lists (top-level commas only, so a legacy
+  // "Legs (Quads, Glutes)" stays one chip).
+  const muscles = parseList(draft.muscleGroup);
+  const equipment = parseList(draft.equipment);
+  // Predefined options first, then anything used elsewhere in the routine.
+  const muscleOptions = [...new Set([...MUSCLE_GROUPS, ...knownMuscles])];
+  const equipmentOptions = [...new Set([...EQUIPMENT_OPTIONS, ...knownEquipment])];
   return (
     <div>
       <div className="app-head">
@@ -354,21 +370,20 @@ function ExerciseForm({
         </div>
         <label>Note (e.g. "per leg")<input value={draft.note} onChange={(e) => set("note", e.target.value)} /></label>
         <label>Rest between sets (seconds)<input type="number" min={0} value={draft.restSeconds} onChange={(e) => set("restSeconds", Number(e.target.value))} /></label>
-        <label>Equipment
-          <ComboBox
-            value={draft.equipment}
-            onChange={(v) => set("equipment", v)}
-            options={EQUIPMENT_OPTIONS}
-            placeholder="Select equipment…"
-            newLabel="＋ Other…"
+        <label>Equipment <span className="muted" style={{ fontWeight: 500 }}>(tap to select — several allowed)</span>
+          <ChipSelect
+            values={equipment}
+            onChange={(v) => set("equipment", v.join(", "))}
+            options={equipmentOptions}
+            addPlaceholder="Add other equipment…"
           />
         </label>
-        <label>Target muscles
-          <MultiCombo
+        <label>Target muscles <span className="muted" style={{ fontWeight: 500 }}>(tap to select — several allowed)</span>
+          <ChipSelect
             values={muscles}
             onChange={(v) => set("muscleGroup", v.join(", "))}
-            options={MUSCLE_GROUPS}
-            placeholder="Select target muscles…"
+            options={muscleOptions}
+            addPlaceholder="Add another muscle…"
           />
         </label>
         <label className="check"><input type="checkbox" checked={draft.perSide} onChange={(e) => set("perSide", e.target.checked)} />Left / right sides (e.g. side plank, split squats)</label>
