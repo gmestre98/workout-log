@@ -368,6 +368,14 @@ input, select { font-family: inherit; color: inherit; }
 .travel-bar.on .tb-knob { transform: translateX(17px); }
 .tb-input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
 .travel-edit { display: flex; flex-direction: column; gap: 13px; padding: 13px; border: 1px solid color-mix(in srgb, var(--ember) 30%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--ember) 5%, transparent); }
+.ex-plane { color: var(--ember); }
+
+/* Per-exercise travel switch in the log sheet */
+.ls-travel { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 13px 0 0; }
+.ls-travel-lab { font-size: 12px; font-weight: 750; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-2); }
+.ls-seg { display: inline-flex; background: var(--bg); border: 1px solid var(--line); border-radius: 11px; padding: 3px; gap: 3px; }
+.ls-seg button { border: none; background: transparent; color: var(--ink-2); font-size: 13px; font-weight: 700; padding: 6px 13px; border-radius: 8px; cursor: pointer; }
+.ls-seg button.active { background: var(--surface); color: var(--ember); box-shadow: var(--shadow-sm); }
 
 .form label.check { flex-direction: row; align-items: center; gap: 9px; color: var(--ink); font-size: 14px; }
 .form label.check input { width: auto; }

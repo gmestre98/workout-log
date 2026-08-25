@@ -6,7 +6,7 @@ import {
   addDaysISO, applyTravel, computeStreak, dayCompletion, dayHeader, dayOf, effectiveVersionId, exerciseCompletion,
   formatPercent, newLog, nextWorkoutDay, orderedWorkoutDays, routineForDate, setMeta, slotColor, todayISO,
 } from "../format";
-import { getTravelMode, setTravelMode } from "../travel";
+import { getTravelMode, setTravelMode, getTravelOff, setTravelOff } from "../travel";
 import { Ring } from "./Ring";
 import { LogSheet } from "./LogSheet";
 import { WorkoutClock } from "./WorkoutClock";
@@ -43,6 +43,10 @@ export function Today({ email }: { email: string }) {
   // exercise with a travel replacement for its variant. Already-logged days
   // instead honour the travel flag stamped on them, so history is authoritative.
   const [travelMode, setTravel] = useState(getTravelMode);
+  // Device-local default set of exercises kept on their normal version while
+  // travelling (see travel.ts). Drives unlogged days; a logged day instead uses
+  // the set it was stamped with (day.travelOff).
+  const [travelOffState, setTravelOffState] = useState(getTravelOff);
   const [schedule, setSchedule] = useState<VersionAssignment[]>([]);
   const [versions, setVersions] = useState<RoutineVersion[]>([]);
   const [sheetFor, setSheetFor] = useState<string | null>(null);
@@ -154,13 +158,32 @@ export function Today({ email }: { email: string }) {
     () => dayExercises.filter((e) => e.travel && e.travel.name).length,
     [dayExercises]
   );
+  // Which exercises are kept on their normal version this day: a logged day uses
+  // the set it was stamped with; an unlogged day follows the device default.
+  const offForDay = useMemo(
+    () => (dayLogged ? new Set(day?.travelOff ?? []) : travelOffState),
+    [dayLogged, day, travelOffState]
+  );
+
+  // Whether a given exercise runs as its travel variant on this day: day-level
+  // travel is on and this one isn't individually opted out.
+  const travelFor = useCallback(
+    (id: string) => useTravel && !offForDay.has(id),
+    [useTravel, offForDay]
+  );
 
   // What's actually shown, logged and scored: each exercise swapped for its
-  // travel variant when travel mode applies (kept under the same id, so logs and
-  // scoring are unaffected).
+  // travel variant when travel mode applies to it (kept under the same id, so
+  // logs and scoring are unaffected).
   const exercises = useMemo(
-    () => dayExercises.map((e) => applyTravel(e, useTravel)),
-    [dayExercises, useTravel]
+    () => dayExercises.map((e) => applyTravel(e, travelFor(e.id))),
+    [dayExercises, travelFor]
+  );
+  // How many are actually running as their travel version right now (travelCount
+  // minus any individually kept on the normal version).
+  const swappedCount = useMemo(
+    () => dayExercises.filter((e) => e.travel?.name && travelFor(e.id)).length,
+    [dayExercises, travelFor]
   );
 
   const scheduleSave = useCallback((next: DayLog) => {
@@ -196,15 +219,20 @@ export function Today({ email }: { email: string }) {
         // Stamp which workout day this session is (rotation mode) so the date
         // renders and scores as a single workout. Legacy days keep it empty.
         const workoutDay = legacy ? base.workoutDay : (selectedDay ?? base.workoutDay);
-        // Stamp travel mode so the day is recorded as (and keeps rendering as) a
-        // travel session. ex is already the effective (travel) exercise, so its
-        // log below snapshots the travel numbers.
-        const next: DayLog = { date, workoutDay, travel: useTravel, exercises: { ...base.exercises, [ex.id]: mutate(current) } };
+        // Stamp travel mode + which exercises were kept normal, so the day is
+        // recorded as (and keeps rendering as) it was performed. ex is already the
+        // effective exercise, so its log below snapshots the right numbers.
+        const travelOff = [...offForDay];
+        const next: DayLog = {
+          date, workoutDay, travel: useTravel,
+          ...(travelOff.length ? { travelOff } : {}),
+          exercises: { ...base.exercises, [ex.id]: mutate(current) },
+        };
         scheduleSave(next);
         return next;
       });
     },
-    [date, scheduleSave, legacy, selectedDay, useTravel]
+    [date, scheduleSave, legacy, selectedDay, useTravel, offForDay]
   );
 
   // chooseDay switches which workout day this session is (the day switcher). It
@@ -243,6 +271,28 @@ export function Today({ email }: { email: string }) {
     [date, scheduleSave]
   );
 
+  // toggleExerciseTravel flips one exercise between its travel and normal version
+  // within a travel day. It updates the device default (so the choice carries to
+  // the rest of the trip) and, on an already-logged day, re-stamps and saves that
+  // day's opt-out set so its history keeps rendering as performed.
+  const toggleExerciseTravel = useCallback(
+    (id: string) => {
+      const next = new Set(offForDay);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      setTravelOffState(next);
+      setTravelOff(next);
+      setDay((prev) => {
+        if (!prev || !dayHasActivity(prev)) return prev;
+        const arr = [...next];
+        const updated: DayLog = { ...prev, date, ...(arr.length ? { travelOff: arr } : { travelOff: [] }) };
+        scheduleSave(updated);
+        return updated;
+      });
+    },
+    [date, scheduleSave, offForDay]
+  );
+
   // logSet marks the next incomplete set of ex as done with the given amount
   // (reps, or seconds/minutes held) and its timed duration in seconds. Used by
   // the exercise-bound timer to store a set directly. No-op once complete.
@@ -272,6 +322,17 @@ export function Today({ email }: { email: string }) {
   const doneCount = exercises.filter((e) => exerciseCompletion(logFor(e)) >= 1).length;
   const hdr = dayHeader(date);
   const sheetEx = exercises.find((e) => e.id === sheetFor) ?? null;
+  // The per-exercise travel control shown in the open log sheet: offered only
+  // while the day is in travel mode and this exercise has a travel replacement.
+  const sheetBase = dayExercises.find((e) => e.id === sheetFor) ?? null;
+  const sheetTravel = useTravel && sheetBase?.travel?.name
+    ? {
+        isTravel: travelFor(sheetBase.id),
+        normalName: sheetBase.name,
+        travelName: sheetBase.travel.name,
+        onToggle: () => toggleExerciseTravel(sheetBase.id),
+      }
+    : undefined;
   const scheduledVersion = useMemo(() => {
     const id = effectiveVersionId(schedule, date);
     return id ? versions.find((v) => v.id === id) : undefined;
@@ -340,9 +401,11 @@ export function Today({ email }: { email: string }) {
           <span className="tb-txt">
             <span className="tb-title">Travel mode</span>
             <span className="tb-sub">
-              {useTravel
-                ? `${travelCount} exercise${travelCount === 1 ? "" : "s"} swapped for travel versions`
-                : `${travelCount} exercise${travelCount === 1 ? "" : "s"} have a travel version`}
+              {!useTravel
+                ? `${travelCount} exercise${travelCount === 1 ? "" : "s"} have a travel version`
+                : swappedCount === travelCount
+                  ? `${travelCount} exercise${travelCount === 1 ? "" : "s"} on the travel version`
+                  : `${swappedCount} of ${travelCount} on the travel version`}
             </span>
           </span>
           <span className="tb-switch" aria-hidden><span className="tb-knob" /></span>
@@ -396,6 +459,7 @@ export function Today({ email }: { email: string }) {
                 exercise={ex}
                 log={logFor(ex)}
                 active={ex.id === activeId}
+                travel={travelFor(ex.id) && !!ex.travel?.name}
                 onOpen={() => setSheetFor(ex.id)}
               />
             ))}
@@ -414,6 +478,7 @@ export function Today({ email }: { email: string }) {
           exercise={sheetEx}
           log={logFor(sheetEx)}
           date={date}
+          travel={sheetTravel}
           onChange={(m) => update(sheetEx, m)}
           onClose={() => setSheetFor(null)}
         />
@@ -442,18 +507,19 @@ export function Today({ email }: { email: string }) {
 }
 
 function ExerciseCard({
-  exercise, log, active, onOpen,
-}: { exercise: Exercise; log: ExerciseLog; active: boolean; onOpen: () => void }) {
+  exercise, log, active, travel, onOpen,
+}: { exercise: Exercise; log: ExerciseLog; active: boolean; travel?: boolean; onOpen: () => void }) {
   const pct = exerciseCompletion(log);
   return (
     <button className={`card ex ${active ? "active" : ""}`} onClick={onOpen} style={{ width: "100%", textAlign: "left" }}>
       <div className="ex-top">
         <div>
-          <div className="ex-name">{exercise.name}</div>
+          <div className="ex-name">{travel && <span className="ex-plane" aria-hidden>✈ </span>}{exercise.name}</div>
           <div className="ex-meta">
             {exercise.plannedSets} × {exercise.plannedAmount} {exercise.unit === "reps" ? "" : exercise.unit === "seconds" ? "s" : "min"}
             {exercise.perSide ? " · per side" : ""}
             {exercise.note ? ` · ${exercise.note}` : ""}
+            {travel ? " · travel version" : ""}
             {active ? " · Now" : ""}
           </div>
         </div>

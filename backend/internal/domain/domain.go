@@ -126,7 +126,12 @@ type DayLog struct {
 	// have a travel replacement were done as their variant. It is a label for
 	// history/export only: completion still scores off each ExerciseLog's own
 	// snapshot, which already captured the travel numbers at log time.
-	Travel    bool                   `json:"travel" firestore:"travel"`
+	Travel bool `json:"travel" firestore:"travel"`
+	// TravelOff holds the IDs of exercises kept on their normal (non-travel)
+	// version on this day even though Travel is on — e.g. the one movement the
+	// user had the equipment for. Empty/absent means every exercise with a travel
+	// replacement used it.
+	TravelOff []string               `json:"travelOff,omitempty" firestore:"travelOff,omitempty"`
 	Exercises map[string]ExerciseLog `json:"exercises" firestore:"exercises"`
 }
 

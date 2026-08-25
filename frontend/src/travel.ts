@@ -22,3 +22,28 @@ export function setTravelMode(on: boolean): void {
     /* ignore quota/availability errors */
   }
 }
+
+// Per-exercise opt-outs: exercise ids kept on their normal version even while
+// travel mode is on (e.g. the movement you brought equipment for). Like the
+// global switch, this is stored on the device and persists through the trip so
+// each new day inherits it; the choice is stamped onto a day when it is logged
+// (DayLog.travelOff) so history stays accurate.
+const OFF_KEY = "wl.travelOff";
+
+export function getTravelOff(): Set<string> {
+  try {
+    const raw = localStorage.getItem(OFF_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function setTravelOff(ids: Set<string>): void {
+  try {
+    if (ids.size) localStorage.setItem(OFF_KEY, JSON.stringify([...ids]));
+    else localStorage.removeItem(OFF_KEY);
+  } catch {
+    /* ignore quota/availability errors */
+  }
+}

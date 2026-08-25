@@ -9,12 +9,16 @@ export function LogSheet({
   exercise,
   log,
   date,
+  travel,
   onChange,
   onClose,
 }: {
   exercise: Exercise;
   log: ExerciseLog;
   date: string;
+  // When set, this exercise has a travel replacement and the day is in travel
+  // mode, so the sheet offers a switch between its normal and travel version.
+  travel?: { isTravel: boolean; normalName: string; travelName: string; onToggle: () => void };
   onChange: (mutate: (log: ExerciseLog) => ExerciseLog) => void;
   onClose: () => void;
 }) {
@@ -87,6 +91,20 @@ export function LogSheet({
             </button>
           </div>
         </div>
+
+        {travel && (
+          <div className="ls-travel" role="group" aria-label="Exercise version">
+            <span className="ls-travel-lab">Version</span>
+            <div className="ls-seg">
+              <button type="button" className={travel.isTravel ? "active" : ""} onClick={() => { if (!travel.isTravel) travel.onToggle(); }}>
+                ✈ Travel
+              </button>
+              <button type="button" className={!travel.isTravel ? "active" : ""} onClick={() => { if (travel.isTravel) travel.onToggle(); }}>
+                Normal
+              </button>
+            </div>
+          </div>
+        )}
 
         {restLeft !== null && (
           <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 13px", margin: "13px 0", background: "var(--bg)" }}>

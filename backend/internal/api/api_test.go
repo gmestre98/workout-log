@@ -112,7 +112,7 @@ func TestCreateExerciseInvalidTravelReplacement(t *testing.T) {
 func TestSaveDayTravelFlag(t *testing.T) {
 	srv, _ := newServer()
 	defer srv.Close()
-	day := domain.DayLog{Travel: true, Exercises: map[string]domain.ExerciseLog{
+	day := domain.DayLog{Travel: true, TravelOff: []string{"ex-2"}, Exercises: map[string]domain.ExerciseLog{
 		"ex-1": {ExerciseID: "ex-1", PlannedSets: 1, PlannedAmount: 10, Unit: domain.UnitReps,
 			Sets: []domain.SetEntry{{Completed: true, ActualAmount: 10}}},
 	}}
@@ -124,6 +124,9 @@ func TestSaveDayTravelFlag(t *testing.T) {
 	resp.Body.Close()
 	if !got.Travel {
 		t.Fatalf("travel flag not persisted: %+v", got)
+	}
+	if len(got.TravelOff) != 1 || got.TravelOff[0] != "ex-2" {
+		t.Fatalf("travelOff not persisted: %+v", got.TravelOff)
 	}
 }
 

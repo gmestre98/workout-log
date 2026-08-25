@@ -68,6 +68,9 @@ export interface DayLog {
   // replacement were performed as their variant). A history/export label only —
   // each ExerciseLog already snapshotted the travel numbers at log time.
   travel?: boolean;
+  // Exercise ids kept on their normal version this day despite travel mode being
+  // on (the user had the equipment for those). Absent means all travel.
+  travelOff?: string[];
   exercises: Record<string, ExerciseLog>;
 }
 
