@@ -44,7 +44,13 @@ export function App() {
   return (
     <div className="app">
       <main className="content">
-        {tab === "today" && <Today email={auth.email} />}
+        {/* Today stays mounted while you're on other tabs (just hidden), so a
+            running set timer — and its chimes — survive navigating away to, e.g.,
+            edit the routine mid-workout. Its per-set stopwatch is local state
+            that unmounting would otherwise reset to zero. */}
+        <div style={tab === "today" ? undefined : { display: "none" }} aria-hidden={tab !== "today"}>
+          <Today email={auth.email} />
+        </div>
         {tab === "history" && <History />}
         {tab === "stats" && <Stats />}
         {tab === "routine" && <Routine />}
