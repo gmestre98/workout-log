@@ -86,11 +86,20 @@ export const UNITS: Unit[] = ["reps", "seconds", "minutes"];
 // reads as one day rather than losing its structure.
 export const DEFAULT_WORKOUT_DAY = "Day 1";
 
-// Suggested workout-day labels (the rotation units) offered as quick-pick chips.
-// Free text — rename or add your own; a label can be as descriptive as
-// "Day 1 — Push". Each session performs one workout day, rotating through them.
-export const DEFAULT_DAYS = ["Day 1", "Day 2", "Day 3", "Day 4"];
+// Target muscles offered in the multi-select dropdown when editing an exercise.
+// The stored muscleGroup is a comma-joined subset of these (plus any custom
+// entries the user types), so an exercise can target several muscles.
+export const MUSCLE_GROUPS = [
+  "Chest", "Upper back", "Lats", "Traps", "Shoulders", "Rear delts",
+  "Biceps", "Triceps", "Forearms", "Core", "Abs", "Obliques", "Lower back",
+  "Glutes", "Quads", "Hamstrings", "Adductors", "Abductors", "Calves",
+  "Neck", "Full body", "Cardio",
+];
 
-// Suggested part labels (sections within a day) offered as quick-pick chips.
-// A day's exercises are sub-grouped by these; free text, so any section works.
-export const DEFAULT_PARTS = ["Wake up", "Pre lunch", "Afternoon", "Evening", "Night"];
+// Equipment options offered in the equipment dropdown. Single choice; the user
+// can also type a custom one.
+export const EQUIPMENT_OPTIONS = [
+  "None", "Bodyweight", "Dumbbells", "Barbell", "Kettlebell", "Resistance band",
+  "Cable machine", "Machine", "Smith machine", "Pull-up bar", "Dip bars",
+  "Bench", "Mat", "Medicine ball", "TRX", "Box", "Foam roller", "Jump rope",
+];

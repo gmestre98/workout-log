@@ -1,27 +1,44 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { Exercise, Unit } from "../types";
-import { DEFAULT_DAYS, DEFAULT_PARTS, DEFAULT_WORKOUT_DAY, UNITS } from "../types";
+import { MUSCLE_GROUPS, EQUIPMENT_OPTIONS, UNITS } from "../types";
 import { dayOf, orderedParts, orderedWorkoutDays, slotColor } from "../format";
 import { toast } from "../toast";
 import { useOnline } from "../useOnline";
 import { ConfirmDialog, Modal } from "./Modal";
 import { ReorderList } from "./Reorder";
 import { DayBody } from "./DayBody";
+import { ComboBox, MultiCombo } from "./Combo";
 import { IconPlus } from "./icons";
 
 type Draft = Omit<Exercise, "id"> & { id?: string };
 
-const blank = (sortOrder: number, workoutDay = DEFAULT_WORKOUT_DAY, timeSlot = DEFAULT_PARTS[0]): Draft => ({
+// parseMuscles splits a stored muscleGroup into the multi-select's chips. It
+// breaks on top-level commas only, so a legacy parenthetical stays whole:
+// "Back, Biceps" → ["Back", "Biceps"] but
+// "Legs (Quads, Glutes)" → ["Legs (Quads, Glutes)"].
+const parseMuscles = (s: string): string[] => {
+  const out: string[] = [];
+  let depth = 0, cur = "";
+  for (const ch of s) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "," && depth === 0) { const t = cur.trim(); if (t) out.push(t); cur = ""; }
+    else cur += ch;
+  }
+  const t = cur.trim();
+  if (t) out.push(t);
+  return out;
+};
+
+// A blank exercise. workoutDay and timeSlot carry no baked-in default — the day
+// is chosen (or created) in the form, and an empty timeSlot means the day has no
+// time-of-day parts (a single flat workout).
+const blank = (sortOrder: number, workoutDay = "", timeSlot = ""): Draft => ({
   workoutDay, timeSlot, name: "", plannedSets: 3, plannedAmount: 10,
-  unit: "reps", note: "", restSeconds: 30, muscleGroup: "", equipment: "None",
+  unit: "reps", note: "", restSeconds: 30, muscleGroup: "", equipment: "",
   sortOrder, active: true, perSide: false,
 });
-
-// nextDayLabel suggests a label for a brand-new workout day: the first default
-// ("Day 1", "Day 2"…) not already used, or "Day N+1" once the defaults run out.
-const nextDayLabel = (existing: string[]) =>
-  DEFAULT_DAYS.find((d) => !existing.includes(d)) ?? `Day ${existing.length + 1}`;
 
 // A drag grip (six dots). Spread the reorder handle props onto it.
 function Grip(props: React.HTMLAttributes<HTMLSpanElement> & { style?: React.CSSProperties }) {
@@ -149,7 +166,7 @@ export function Routine() {
           <div className="subt">Plan · rotating</div>
           <div className="title">Routine</div>
         </div>
-        <button className="iconbtn primary" onClick={() => setDraft(blank(exercises.length, nextDayLabel(days)))} aria-label="Add workout day" disabled={offline}><IconPlus /></button>
+        <button className="iconbtn primary" onClick={() => setDraft(blank(exercises.length))} aria-label="Add workout day" disabled={offline}><IconPlus /></button>
       </div>
 
       {offline && (
@@ -220,7 +237,7 @@ export function Routine() {
       />
 
       {days.length > 0 && (
-        <button className="add-day" onClick={() => setDraft(blank(exercises.length, nextDayLabel(days)))} disabled={offline}>
+        <button className="add-day" onClick={() => setDraft(blank(exercises.length))} disabled={offline}>
           <IconPlus /> Add workout day
         </button>
       )}
@@ -284,8 +301,9 @@ function ExerciseForm({
 }: { draft: Draft; setDraft: (d: Draft) => void; knownDays: string[]; knownParts: string[]; onSave: () => void; onCancel: () => void; onDelete?: () => void; error: string; offline?: boolean }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft({ ...draft, [key]: value });
-  const dayChips = [...new Set([...knownDays, ...DEFAULT_DAYS, ...(draft.workoutDay ? [draft.workoutDay] : [])])];
-  const partChips = [...new Set([...knownParts.filter(Boolean), ...DEFAULT_PARTS, ...(draft.timeSlot ? [draft.timeSlot] : [])])];
+  // muscleGroup is stored comma-joined; expose it to the multi-select as a list
+  // (top-level commas only, so a legacy "Legs (Quads, Glutes)" stays one chip).
+  const muscles = parseMuscles(draft.muscleGroup);
   return (
     <div>
       <div className="app-head">
@@ -305,22 +323,25 @@ function ExerciseForm({
       <form className="form" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
         <label>Name<input value={draft.name} onChange={(e) => set("name", e.target.value)} required /></label>
         <label>Workout day
-          <div className="slotchips">
-            {dayChips.map((s) => (
-              <button type="button" key={s} className={`chip ${s === draft.workoutDay ? "active" : ""}`} onClick={() => set("workoutDay", s)}>{s}</button>
-            ))}
-          </div>
-          <input value={draft.workoutDay} onChange={(e) => set("workoutDay", e.target.value)} placeholder="e.g. Day 1 — Push" required />
+          <ComboBox
+            value={draft.workoutDay}
+            onChange={(v) => set("workoutDay", v)}
+            options={knownDays}
+            placeholder="Select a workout day…"
+            newLabel="＋ New workout day…"
+            required
+          />
           <span className="tiny muted" style={{ fontWeight: 500 }}>The rotation unit. Each session does one workout day, rotating through them in order.</span>
         </label>
-        <label>Part of the day
-          <div className="slotchips">
-            {partChips.map((s) => (
-              <button type="button" key={s} className={`chip ${s === draft.timeSlot ? "active" : ""}`} onClick={() => set("timeSlot", s)}>{s}</button>
-            ))}
-          </div>
-          <input value={draft.timeSlot} onChange={(e) => set("timeSlot", e.target.value)} placeholder="e.g. Wake up, Main, Mobility" />
-          <span className="tiny muted" style={{ fontWeight: 500 }}>A section within the day (a time of day or block). Exercises are grouped under it.</span>
+        <label>Time of day <span className="muted" style={{ fontWeight: 500 }}>(optional)</span>
+          <ComboBox
+            value={draft.timeSlot}
+            onChange={(v) => set("timeSlot", v)}
+            options={knownParts.filter(Boolean)}
+            placeholder="No time of day — single workout"
+            newLabel="＋ New time of day…"
+          />
+          <span className="tiny muted" style={{ fontWeight: 500 }}>Leave empty for one flat workout, or split the day into blocks (e.g. Wake up, Main, Mobility).</span>
         </label>
         <div className="row">
           <label>Sets<input type="number" min={1} value={draft.plannedSets} onChange={(e) => set("plannedSets", Number(e.target.value))} /></label>
@@ -332,11 +353,24 @@ function ExerciseForm({
           </label>
         </div>
         <label>Note (e.g. "per leg")<input value={draft.note} onChange={(e) => set("note", e.target.value)} /></label>
-        <div className="row">
-          <label>Rest between sets (seconds)<input type="number" min={0} value={draft.restSeconds} onChange={(e) => set("restSeconds", Number(e.target.value))} /></label>
-          <label>Equipment<input value={draft.equipment} onChange={(e) => set("equipment", e.target.value)} /></label>
-        </div>
-        <label>Target muscle group<input value={draft.muscleGroup} onChange={(e) => set("muscleGroup", e.target.value)} /></label>
+        <label>Rest between sets (seconds)<input type="number" min={0} value={draft.restSeconds} onChange={(e) => set("restSeconds", Number(e.target.value))} /></label>
+        <label>Equipment
+          <ComboBox
+            value={draft.equipment}
+            onChange={(v) => set("equipment", v)}
+            options={EQUIPMENT_OPTIONS}
+            placeholder="Select equipment…"
+            newLabel="＋ Other…"
+          />
+        </label>
+        <label>Target muscles
+          <MultiCombo
+            values={muscles}
+            onChange={(v) => set("muscleGroup", v.join(", "))}
+            options={MUSCLE_GROUPS}
+            placeholder="Select target muscles…"
+          />
+        </label>
         <label className="check"><input type="checkbox" checked={draft.perSide} onChange={(e) => set("perSide", e.target.checked)} />Left / right sides (e.g. side plank, split squats)</label>
         {draft.perSide && <p className="tiny muted" style={{ margin: "-6px 2px 0" }}>Each set is logged for both sides — {draft.plannedSets} × {draft.plannedAmount} {draft.unit === "reps" ? "reps" : draft.unit === "seconds" ? "s" : "min"} per side.</p>}
         <label className="check"><input type="checkbox" checked={draft.active} onChange={(e) => set("active", e.target.checked)} />Active (shown in daily tracking)</label>

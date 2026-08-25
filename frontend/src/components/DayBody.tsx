@@ -33,7 +33,10 @@ function buildRows(exercises: Exercise[]): { rows: Row[]; parts: string[] } {
   const parts = orderedParts(exercises);
   const rows: Row[] = [];
   for (const part of parts) {
-    rows.push({ kind: "header", part, key: `h:${part}` });
+    // The unnamed part ("") is the day's flat/unsorted section — its exercises
+    // render as a plain list with no header, so a day with no time-of-day blocks
+    // reads as a single workout.
+    if (part !== "") rows.push({ kind: "header", part, key: `h:${part}` });
     for (const ex of exercises.filter((e) => e.timeSlot === part)) {
       rows.push({ kind: "ex", ex, part, key: ex.id });
     }
@@ -219,7 +222,7 @@ export function DayBody({
 
   return (
     <>
-      <div className="day-body" ref={containerRef}>
+      <div className={`day-body${parts.some((p) => p !== "") ? "" : " flat"}`} ref={containerRef}>
         {rows.map((row, i) => {
           const isMoving = !!drag && i >= drag.lo && i <= drag.hi;
           return (
@@ -248,9 +251,20 @@ export function DayBody({
           );
         })}
       </div>
-      <button className="add-part" onClick={onAddPart} disabled={disabled}>
-        <IconPlus /> Add part
-      </button>
+      {parts.some((p) => p !== "") ? (
+        <button className="add-part" onClick={onAddPart} disabled={disabled}>
+          <IconPlus /> Add part
+        </button>
+      ) : (
+        <div className="day-foot">
+          <button className="add-part" onClick={() => onAddExercise("")} disabled={disabled}>
+            <IconPlus /> Add exercise
+          </button>
+          <button className="add-part" onClick={onAddPart} disabled={disabled}>
+            <IconPlus /> Split into parts
+          </button>
+        </div>
+      )}
     </>
   );
 }
