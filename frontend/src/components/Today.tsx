@@ -318,19 +318,18 @@ export function Today({ email }: { email: string }) {
             <span className="slot-title">Workout</span>
             {selectedDay && !day?.workoutDay && !override && <span className="tiny muted">next up</span>}
           </div>
-          <div className="slotchips" role="tablist" aria-label="Workout day">
-            {orderedDays.map((d) => (
-              <button
-                key={d}
-                type="button"
-                role="tab"
-                aria-selected={d === selectedDay}
-                className={`chip ${d === selectedDay ? "active" : ""}`}
-                onClick={() => chooseDay(d)}
-              >
-                {d}
-              </button>
-            ))}
+          <div className="day-select-wrap">
+            <select
+              className="day-select"
+              value={selectedDay ?? ""}
+              onChange={(e) => chooseDay(e.target.value)}
+              aria-label="Workout day"
+            >
+              {orderedDays.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+            <span className="day-select-chev" aria-hidden>▾</span>
           </div>
         </div>
       )}
