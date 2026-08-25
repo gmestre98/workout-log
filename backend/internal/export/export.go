@@ -6,6 +6,8 @@
 // ("workout") holding one daily-completion table per month, then a Routine tab
 // (the current config) and a Versions tab. Routine tabs run in chronological
 // order and are titled by the month-year span they cover (e.g. "May–Jul 2026").
+// A routine's tables fill in every calendar day it was active per the schedule,
+// so rest / no-activity days appear (blank, 0%), not only the days logged.
 //
 // Each day is attributed to a routine by the version schedule (the effective-
 // dated VersionAssignment timeline): the routine a day belongs to is the version
@@ -181,6 +183,52 @@ func scheduleAttributor(assignments []domain.VersionAssignment, routines []routi
 		idx, ok := idxByVersion[vid]
 		return idx, ok
 	}
+}
+
+// scheduleDates returns, per routine index, every calendar date the routine was
+// active according to the schedule: for each assignment mapping to a routine,
+// each day from its StartDate up to the next assignment's StartDate (exclusive).
+// The final, open-ended interval (the current routine) is capped at `through`
+// (the export's generation date, inclusive) so it fills up to today and no
+// further. Dates are "YYYY-MM-DD", ascending. These are used to show rest / no-
+// activity days within a routine's active months, not just the days logged.
+func scheduleDates(assignments []domain.VersionAssignment, routines []routine, through string) map[int][]string {
+	idxByVersion := make(map[string]int, len(routines))
+	for i, r := range routines {
+		if r.id != "" {
+			idxByVersion[r.id] = i
+		}
+	}
+	sorted := append([]domain.VersionAssignment(nil), assignments...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].StartDate < sorted[j].StartDate })
+
+	out := map[int][]string{}
+	for i, a := range sorted {
+		idx, ok := idxByVersion[a.VersionID]
+		if !ok {
+			continue
+		}
+		start, err := time.Parse("2006-01-02", a.StartDate)
+		if err != nil {
+			continue
+		}
+		var end time.Time // exclusive
+		if i+1 < len(sorted) {
+			if end, err = time.Parse("2006-01-02", sorted[i+1].StartDate); err != nil {
+				continue
+			}
+		} else {
+			t, err := time.Parse("2006-01-02", through)
+			if err != nil {
+				continue
+			}
+			end = t.AddDate(0, 0, 1) // make `through` inclusive
+		}
+		for day := start; day.Before(end); day = day.AddDate(0, 0, 1) {
+			out[idx] = append(out[idx], day.Format("2006-01-02"))
+		}
+	}
+	return out
 }
 
 // dayCompletion is a day's average completion scored against its attributed
@@ -360,23 +408,51 @@ func buildGrids(d Data) []cellGrid {
 		}
 	}
 
+	// Each routine's rows are the union of the days logged against it and every
+	// calendar day it was active per the schedule, so rest / no-activity days show
+	// up within the routine's active months (as blank, 0% rows).
+	schedDates := scheduleDates(d.Assignments, routines, d.Generated.Format("2006-01-02"))
+	logged := make(map[string]domain.DayLog, len(d.Days))
+	for _, day := range d.Days {
+		logged[day.Date] = day
+	}
+
 	// Collect the routine tabs to emit (skip empty historical routines; keep the
 	// current one even when empty), then order them chronologically by their
-	// first logged day. Empty tabs sort last.
+	// first day. Empty tabs sort last.
 	type routineTab struct {
 		r    routine
 		days []domain.DayLog
 	}
 	var tabs []routineTab
 	for i, r := range routines {
-		var days []domain.DayLog
-		for _, day := range d.Days {
-			if attr[day.Date] == i {
-				days = append(days, day)
+		seen := map[string]bool{}
+		var dates []string
+		addDate := func(dt string) {
+			if !seen[dt] {
+				seen[dt] = true
+				dates = append(dates, dt)
 			}
 		}
-		if len(days) == 0 && !r.current {
+		for _, day := range d.Days {
+			if attr[day.Date] == i {
+				addDate(day.Date)
+			}
+		}
+		for _, dt := range schedDates[i] {
+			addDate(dt)
+		}
+		if len(dates) == 0 && !r.current {
 			continue
+		}
+		sort.Strings(dates)
+		days := make([]domain.DayLog, 0, len(dates))
+		for _, dt := range dates {
+			if dl, ok := logged[dt]; ok {
+				days = append(days, dl) // a real log (possibly empty)
+			} else {
+				days = append(days, domain.NewDayLog(dt)) // no record: a rest day
+			}
 		}
 		tabs = append(tabs, routineTab{r, days})
 	}

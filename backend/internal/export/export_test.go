@@ -245,22 +245,81 @@ func TestScheduleAttributionByDate(t *testing.T) {
 			{StartDate: "2026-08-01", VersionID: "vAug"},
 		},
 		Days: []domain.DayLog{
-			day("2026-06-15", "a", "b"), // May routine period
-			day("2026-08-10", "a", "b"), // Aug routine period
+			day("2026-06-15", "a", "b"), // May-routine period
+			day("2026-08-10", "a", "b"), // Aug-routine period
 		},
+		Generated: time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC),
 	}
 	grids := buildGrids(d)
 	// Summary + two routine tabs (chronological) + Routine + Versions.
 	if len(grids) != 5 {
 		t.Fatalf("grids = %d, want 5: %v", len(grids), titles(grids))
 	}
-	if grids[1].title != "June 2026" || grids[2].title != "August 2026" {
-		t.Fatalf("routine tab titles = %v, want June 2026 then August 2026", titles(grids))
+	if grids[1].title != "May–Jul 2026" || grids[2].title != "August 2026" {
+		t.Fatalf("routine tab titles = %v, want May–Jul 2026 then August 2026", titles(grids))
 	}
-	// The August day must not appear in the May-routine tab: one month section is
-	// a title row, a header row, one data row, and a blank separator = 4 rows.
-	if n := len(grids[1].rows); n != 4 {
-		t.Fatalf("June tab rows = %d, want 4 (no bleed-through)", n)
+	// The August day belongs to the Aug tab, not the May–Jul tab, regardless of
+	// exercise overlap.
+	if hasDateRow(grids[1], "2026-08-10") {
+		t.Fatal("August day bled into the May–Jul routine tab")
+	}
+	if !hasDateRow(grids[2], "2026-08-10") {
+		t.Fatal("August day missing from the August routine tab")
+	}
+}
+
+// hasDateRow reports whether a routine grid has a data row for the given date.
+func hasDateRow(g cellGrid, date string) bool {
+	for _, row := range g.rows {
+		if len(row) > 0 && row[0] == date {
+			return true
+		}
+	}
+	return false
+}
+
+// A routine's tab fills in every calendar day it was active per the schedule,
+// so rest / no-activity days appear (blank, 0%) — not only the days logged.
+func TestScheduleFillsNoActivityDays(t *testing.T) {
+	v := domain.RoutineVersion{
+		ID: "v1", CreatedAt: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+		Note: "r", Status: domain.StatusPast,
+		Exercises: []domain.Exercise{ex("a", "A")},
+	}
+	// Active June only (next assignment starts July 1). One workout logged.
+	d := Data{
+		Versions: []domain.RoutineVersion{v},
+		Assignments: []domain.VersionAssignment{
+			{StartDate: "2026-06-01", VersionID: "v1"},
+			{StartDate: "2026-07-01", VersionID: "vNext"},
+		},
+		Days:      []domain.DayLog{day("2026-06-15", "a")},
+		Generated: time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC),
+	}
+	grids := buildGrids(d)
+	// grids[1] is the routine tab: title row + header + 30 June days + blank.
+	tab := grids[1]
+	if tab.title != "June 2026" {
+		t.Fatalf("tab title = %q, want June 2026", tab.title)
+	}
+	var dataRows, filled15 int
+	for _, row := range tab.rows {
+		if len(row) < 2 {
+			continue // month title or blank separator
+		}
+		if s, _ := row[0].(string); s == "Date" {
+			continue // header
+		}
+		dataRows++
+		if row[0] == "2026-06-15" {
+			filled15++
+		}
+	}
+	if dataRows != 30 {
+		t.Fatalf("June data rows = %d, want 30 (every calendar day)", dataRows)
+	}
+	if filled15 != 1 {
+		t.Fatalf("logged day 2026-06-15 present %d times, want 1", filled15)
 	}
 }
 
