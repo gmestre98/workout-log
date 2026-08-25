@@ -378,12 +378,12 @@ function ExerciseForm({
             addPlaceholder="Add other equipment…"
           />
         </label>
-        <label>Target muscles <span className="muted" style={{ fontWeight: 500 }}>(tap to select — several allowed)</span>
+        <label>Trained parts <span className="muted" style={{ fontWeight: 500 }}>(tap to select — several allowed)</span>
           <ChipSelect
             values={muscles}
             onChange={(v) => set("muscleGroup", v.join(", "))}
             options={muscleOptions}
-            addPlaceholder="Add another muscle…"
+            addPlaceholder="Add another part…"
           />
         </label>
         <label className="check"><input type="checkbox" checked={draft.perSide} onChange={(e) => set("perSide", e.target.checked)} />Left / right sides (e.g. side plank, split squats)</label>

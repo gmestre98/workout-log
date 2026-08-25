@@ -86,9 +86,9 @@ export const UNITS: Unit[] = ["reps", "seconds", "minutes"];
 // reads as one day rather than losing its structure.
 export const DEFAULT_WORKOUT_DAY = "Day 1";
 
-// Target muscles offered in the multi-select dropdown when editing an exercise.
-// The stored muscleGroup is a comma-joined subset of these (plus any custom
-// entries the user types), so an exercise can target several muscles.
+// Trained parts offered as chips when editing an exercise. The stored
+// muscleGroup is a comma-joined subset of these (plus any custom entries the
+// user types), so an exercise can train several parts.
 export const MUSCLE_GROUPS = [
   "Chest", "Upper back", "Lats", "Traps", "Shoulders", "Rear delts",
   "Biceps", "Triceps", "Forearms", "Core", "Abs", "Obliques", "Lower back",
@@ -96,10 +96,9 @@ export const MUSCLE_GROUPS = [
   "Neck", "Full body", "Cardio",
 ];
 
-// Equipment options offered in the equipment dropdown. Single choice; the user
-// can also type a custom one.
+// Equipment options offered as chips — only the ones actually in use for now.
+// The user can add more via the add field, and anything used elsewhere in the
+// routine resurfaces as a suggestion automatically.
 export const EQUIPMENT_OPTIONS = [
-  "None", "Bodyweight", "Dumbbells", "Barbell", "Kettlebell", "Resistance band",
-  "Cable machine", "Machine", "Smith machine", "Pull-up bar", "Dip bars",
-  "Bench", "Mat", "Medicine ball", "TRX", "Box", "Foam roller", "Jump rope",
+  "None", "Dumbbells", "Pull-up Bar", "Backpack",
 ];

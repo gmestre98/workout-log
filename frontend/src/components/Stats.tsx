@@ -145,7 +145,7 @@ export function Stats() {
           </div>
 
           <div className="card" style={{ padding: 15, marginTop: 12 }}>
-            <span className="small" style={{ fontWeight: 750 }}>By muscle group</span>
+            <span className="small" style={{ fontWeight: 750 }}>By trained part</span>
             {muscles.length === 0 ? (
               <p className="empty" style={{ padding: "12px 0" }}>Add exercises to see this.</p>
             ) : (
