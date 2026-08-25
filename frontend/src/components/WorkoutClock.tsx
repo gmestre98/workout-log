@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Exercise, ExerciseLog } from "../types";
-import { useWorkoutClock, workoutClock } from "../timer";
+import { setClock, useSetClock, useWorkoutClock, workoutClock } from "../timer";
 import { exerciseCompletion, formatDuration, setMeta, unitLabel } from "../format";
 import { toast } from "../toast";
 import { playRestDone, playSetDone } from "../sound";
@@ -15,6 +15,9 @@ const mmss = (n: number) => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, 
 // splits into Training time (while a set is being timed) and Rest time (all
 // other time once started); "Pause workout" freezes both so you can stop and
 // finish later the same day without inflating your rest.
+//
+// All timer state lives in the persisted stores in ../timer (session + per-set
+// stopwatch), so a running timer survives navigating away and a full reload.
 export function WorkoutClock({
   date,
   exercises,
@@ -28,94 +31,49 @@ export function WorkoutClock({
 }) {
   const session = useWorkoutClock(date);
   const paused = session.paused;
-  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const { state: set, elapsedMs: setElapsedMs, restLeft } = useSetClock(date);
+  const running = set.running;
   const [confirmReset, setConfirmReset] = useState(false);
 
-  // Per-set stopwatch, which drives the session's training time.
-  const [running, setRunning] = useState(false);
-  const startRef = useRef<number | null>(null);
-  const accumRef = useRef(0);
-  const [, tick] = useState(0);
-  // Guards the "timed set reached its target" chime so it sounds once per set.
-  const setDoneBeepedRef = useRef(false);
-
-  // Editable reps for rep-based exercises; null means "use planned".
-  const [reps, setReps] = useState<number | null>(null);
-
-  // Visual between-set countdown (the session clock counts rest on its own).
-  const [restLeft, setRestLeft] = useState<number | null>(null);
-
   const firstIncomplete = exercises.find((e) => exerciseCompletion(logFor(e)) < 1);
-  const selected = exercises.find((e) => e.id === selectedId) ?? firstIncomplete ?? exercises[0];
-  const selectedKey = selected?.id;
+  const selected = exercises.find((e) => e.id === set.exerciseId) ?? firstIncomplete ?? exercises[0];
 
-  // Reset the per-set stopwatch whenever the tracked exercise changes.
+  // Chime once when a timed set first reaches its target duration.
   useEffect(() => {
-    accumRef.current = 0;
-    startRef.current = null;
-    setRunning(false);
-    setReps(null);
-    setDoneBeepedRef.current = false;
-  }, [selectedKey]);
-
-  // Tick the set stopwatch display while it runs, and chime once when a timed
-  // set first reaches its target duration.
-  useEffect(() => {
-    if (!running) return;
-    const t = setInterval(() => {
-      tick((n) => n + 1);
-      const u = selected?.unit;
-      if (!selected || u === "reps" || setDoneBeepedRef.current) return;
-      const target = selected.plannedAmount * (u === "minutes" ? 60000 : 1000);
-      const elapsed = accumRef.current + (startRef.current !== null ? Date.now() - startRef.current : 0);
-      if (target > 0 && elapsed >= target) {
-        setDoneBeepedRef.current = true;
-        playSetDone();
-      }
-    }, 250);
-    return () => clearInterval(t);
-  }, [running, selected]);
-
-  // Between-set countdown.
-  useEffect(() => {
-    if (restLeft === null) return;
-    if (restLeft <= 0) {
-      playRestDone(); // rest countdown reached zero on its own (not skipped)
-      setRestLeft(null);
-      return;
+    if (!running || set.beeped || !selected || selected.unit === "reps") return;
+    const target = selected.plannedAmount * (selected.unit === "minutes" ? 60000 : 1000);
+    if (target > 0 && setElapsedMs >= target) {
+      setClock.markBeeped(date);
+      playSetDone();
     }
-    const t = setTimeout(() => setRestLeft((v) => (v === null ? null : v - 1)), 1000);
-    return () => clearTimeout(t);
-  }, [restLeft]);
+  }, [setElapsedMs, running, set.beeped, selected, date]);
+
+  // Chime when the rest countdown reaches zero on its own (not skipped/expired
+  // during a reload), then clear it.
+  const prevRest = useRef(restLeft);
+  useEffect(() => {
+    if (restLeft === 0) {
+      if (prevRest.current !== null && prevRest.current > 0) playRestDone();
+      setClock.clearRest(date);
+    }
+    prevRest.current = restLeft;
+  }, [restLeft, date]);
 
   if (!selected) return null;
 
-  const setElapsedMs =
-    accumRef.current + (running && startRef.current !== null ? Date.now() - startRef.current : 0);
-
-  const freezeSet = () => {
-    accumRef.current = setElapsedMs;
-    startRef.current = null;
-    setRunning(false);
-  };
-
   const startSet = () => {
-    setRestLeft(null);
-    if (running) return;
-    startRef.current = Date.now();
-    setRunning(true);
+    setClock.select(date, selected.id); // pin the tracked exercise (no-op if same)
+    setClock.start(date);
     workoutClock.startTraining(date); // training time accrues; resumes if paused
   };
 
   const pauseSet = () => {
-    if (!running) return;
-    freezeSet();
+    setClock.pause(date);
     workoutClock.stopTraining(date); // stop timing this set → resting
   };
 
   const pauseWorkout = () => {
-    if (running) freezeSet();
-    setRestLeft(null);
+    setClock.pauseWorkout(date);
     workoutClock.pauseWorkout(date);
   };
 
@@ -129,7 +87,7 @@ export function WorkoutClock({
   const isTime = unit !== "reps";
   const targetMs = selected.plannedAmount * (unit === "minutes" ? 60000 : 1000);
   const targetReached = isTime && setElapsedMs >= targetMs;
-  const repVal = reps ?? selected.plannedAmount;
+  const repVal = set.reps ?? selected.plannedAmount;
 
   const logSet = () => {
     if (allDone) return;
@@ -144,31 +102,21 @@ export function WorkoutClock({
     }
     onLogSet(selected, amount, elapsedSecs);
 
-    // Reset the set stopwatch and move the session into its resting phase.
-    accumRef.current = 0;
-    startRef.current = null;
-    setRunning(false);
-    setReps(null);
-    setDoneBeepedRef.current = false;
+    const willBeDone = doneCount + 1 >= totalSets;
+    // Reset the set stopwatch and start the between-set rest (unless now done).
+    setClock.logged(date, willBeDone ? 0 : selected.restSeconds);
     workoutClock.stopTraining(date);
 
-    const willBeDone = doneCount + 1 >= totalSets;
-    if (!willBeDone && selected.restSeconds > 0) setRestLeft(selected.restSeconds);
     if (willBeDone) {
       toast(`${selected.name} done!`);
       const next = exercises.find((e) => e.id !== selected.id && exerciseCompletion(logFor(e)) < 1);
-      if (next) setSelectedId(next.id);
+      if (next) setClock.select(date, next.id);
     }
   };
 
   const doReset = () => {
-    setRestLeft(null);
+    setClock.reset(date);
     workoutClock.reset(date);
-    accumRef.current = 0;
-    startRef.current = null;
-    setRunning(false);
-    setReps(null);
-    setDoneBeepedRef.current = false;
     setConfirmReset(false);
   };
 
@@ -199,7 +147,7 @@ export function WorkoutClock({
         <select
           className="clock-select"
           value={selected.id}
-          onChange={(e) => setSelectedId(e.target.value)}
+          onChange={(e) => setClock.select(date, e.target.value)}
           aria-label="Exercise to track"
         >
           {exercises.map((e) => {
@@ -239,18 +187,18 @@ export function WorkoutClock({
         <div className="clock-reps">
           <span className="clock-reps-lab">Reps this set</span>
           <div className="stepper">
-            <button className="stepbtn" onClick={() => setReps(Math.max(0, repVal - 1))} aria-label="Fewer reps">–</button>
+            <button className="stepbtn" onClick={() => setClock.setReps(date, Math.max(0, repVal - 1))} aria-label="Fewer reps">–</button>
             <span className="stepval">{repVal}</span>
-            <button className="stepbtn" onClick={() => setReps(repVal + 1)} aria-label="More reps">+</button>
+            <button className="stepbtn" onClick={() => setClock.setReps(date, repVal + 1)} aria-label="More reps">+</button>
           </div>
         </div>
       )}
 
-      {restLeft !== null && (
+      {restLeft !== null && restLeft > 0 && (
         <div className="clock-rest">
           <span className="clock-rest-ic"><IconTimer /></span>
           <span className="clock-rest-txt">Rest · <span className="num">{mmss(restLeft)}</span></span>
-          <button className="pillbadge rest-skip" onClick={() => setRestLeft(null)}>Skip</button>
+          <button className="pillbadge rest-skip" onClick={() => setClock.clearRest(date)}>Skip</button>
         </div>
       )}
 

@@ -170,3 +170,155 @@ export function useWorkoutClock(date: string): ClockTotals {
   }, [live]);
   return clockTotals(state, Date.now());
 }
+
+// --- Per-set stopwatch -------------------------------------------------------
+//
+// The exercise-bound stopwatch (the big timer counting the current set), the
+// selected exercise, the editable reps and the between-set rest countdown. Like
+// the session clock this is a module-level, localStorage-backed store keyed by
+// date, with elapsed derived from timestamps — so it survives a tab switch AND a
+// full page reload (e.g. leaving mid-set to edit the routine, or the PWA being
+// reloaded). Elapsed = accumMs + (running ? now - start). Rest is stored as an
+// absolute end time so the countdown reconstructs after a reload.
+
+export interface SetState {
+  exerciseId: string | null;
+  running: boolean;
+  accumMs: number;
+  start: number | null; // epoch ms the current run began, or null when frozen
+  reps: number | null; // editable rep count for rep-based sets; null = planned
+  restEndsAt: number | null; // epoch ms the rest countdown ends
+  beeped: boolean; // target-reached chime already played for this set
+}
+
+const EMPTY_SET: SetState = { exerciseId: null, running: false, accumMs: 0, start: null, reps: null, restEndsAt: null, beeped: false };
+const setStore = new Map<string, SetState>();
+const setListeners = new Set<() => void>();
+const setKey = (date: string) => `wl.set.${date}`;
+const SET_SCHEMA = 1;
+
+function loadSet(date: string): SetState {
+  const cached = setStore.get(date);
+  if (cached) return cached;
+  let state = EMPTY_SET;
+  try {
+    const raw = localStorage.getItem(setKey(date));
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p && p.v === SET_SCHEMA) {
+        state = {
+          exerciseId: p.exerciseId ?? null,
+          running: !!p.running,
+          accumMs: p.accumMs ?? 0,
+          start: p.start ?? null,
+          reps: p.reps ?? null,
+          restEndsAt: p.restEndsAt ?? null,
+          beeped: !!p.beeped,
+        };
+      }
+    }
+  } catch {
+    /* ignore malformed storage */
+  }
+  setStore.set(date, state);
+  return state;
+}
+
+function writeSet(date: string, next: SetState) {
+  setStore.set(date, next);
+  try {
+    localStorage.setItem(setKey(date), JSON.stringify({ v: SET_SCHEMA, ...next }));
+  } catch {
+    /* ignore quota/availability errors */
+  }
+  for (const l of setListeners) l();
+}
+
+export const setClock = {
+  get: loadSet,
+
+  // Track a different exercise: reset the stopwatch/reps, but let any running
+  // rest countdown carry over (it belongs to the session, not the exercise).
+  select(date: string, exerciseId: string) {
+    const s = loadSet(date);
+    if (s.exerciseId === exerciseId) return;
+    writeSet(date, { ...EMPTY_SET, exerciseId, restEndsAt: s.restEndsAt });
+  },
+
+  // Begin (or resume) timing the current set.
+  start(date: string) {
+    const s = loadSet(date);
+    if (s.running) return;
+    writeSet(date, { ...s, running: true, start: Date.now(), restEndsAt: null });
+  },
+
+  // Freeze the set stopwatch, folding the live run into the accumulator.
+  pause(date: string) {
+    const s = loadSet(date);
+    if (!s.running) return;
+    const now = Date.now();
+    writeSet(date, { ...s, running: false, accumMs: s.accumMs + (s.start ? now - s.start : 0), start: null });
+  },
+
+  setReps(date: string, reps: number | null) {
+    writeSet(date, { ...loadSet(date), reps });
+  },
+
+  markBeeped(date: string) {
+    writeSet(date, { ...loadSet(date), beeped: true });
+  },
+
+  clearRest(date: string) {
+    const s = loadSet(date);
+    if (s.restEndsAt === null) return;
+    writeSet(date, { ...s, restEndsAt: null });
+  },
+
+  // A set was just logged: clear the stopwatch and start the rest countdown
+  // (restSeconds = 0 skips it, e.g. when the exercise is now complete).
+  logged(date: string, restSeconds: number) {
+    const s = loadSet(date);
+    writeSet(date, {
+      ...s, running: false, accumMs: 0, start: null, reps: null, beeped: false,
+      restEndsAt: restSeconds > 0 ? Date.now() + restSeconds * 1000 : null,
+    });
+  },
+
+  // Stop the whole workout: freeze the set and drop any rest countdown.
+  pauseWorkout(date: string) {
+    const s = loadSet(date);
+    const now = Date.now();
+    writeSet(date, { ...s, running: false, accumMs: s.accumMs + (s.running && s.start ? now - s.start : 0), start: null, restEndsAt: null });
+  },
+
+  reset(date: string) {
+    writeSet(date, { ...EMPTY_SET });
+  },
+};
+
+export interface SetTotals {
+  state: SetState;
+  elapsedMs: number; // live set-stopwatch time
+  restLeft: number | null; // whole seconds left on the rest countdown, or null
+}
+
+// useSetClock returns the live set stopwatch for a date, re-rendering ~4×/sec
+// while the set or a rest countdown is running.
+export function useSetClock(date: string): SetTotals {
+  const state = useSyncExternalStore(
+    (cb) => { setListeners.add(cb); return () => setListeners.delete(cb); },
+    () => loadSet(date),
+    () => loadSet(date)
+  );
+  const [, tick] = useState(0);
+  const live = state.running || state.restEndsAt !== null;
+  useEffect(() => {
+    if (!live) return;
+    const t = setInterval(() => tick((n) => n + 1), 250);
+    return () => clearInterval(t);
+  }, [live]);
+  const now = Date.now();
+  const elapsedMs = state.accumMs + (state.running && state.start !== null ? now - state.start : 0);
+  const restLeft = state.restEndsAt !== null ? Math.max(0, Math.ceil((state.restEndsAt - now) / 1000)) : null;
+  return { state, elapsedMs, restLeft };
+}
