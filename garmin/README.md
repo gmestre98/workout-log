@@ -10,6 +10,10 @@ The watch reaches the internet **through your phone**: the Garmin Connect Mobile
 app relays the HTTPS requests over Bluetooth, so keep your phone nearby with
 Garmin Connect running.
 
+> **On Windows?** The `setup.sh` / `build.sh` scripts below are macOS-only.
+> Follow [INSTALL-Windows.md](INSTALL-Windows.md) instead — same result
+> (`bin/workout-log.prg`), Windows tooling.
+
 ## Layout
 
 ```

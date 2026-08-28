@@ -86,8 +86,56 @@ class MainView extends WatchUi.View {
         } else {
             msg = WatchUi.loadResource(Rez.Strings.Loading);
         }
-        dc.drawText(dc.getWidth() / 2, dc.getHeight() / 2, Gfx.FONT_SMALL, msg,
-            Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
+        // drawText does not wrap, so long messages (e.g. the setup prompt) would
+        // run off the round screen and clip. Wrap to ~78% of the width and draw
+        // the resulting lines centered as a block.
+        var font = Gfx.FONT_TINY;
+        var lines = wrap(dc, msg, font, (dc.getWidth() * 78) / 100);
+        var lineH = dc.getFontHeight(font);
+        var startY = dc.getHeight() / 2 - (lines.size() * lineH) / 2 + lineH / 2;
+        for (var i = 0; i < lines.size(); i++) {
+            dc.drawText(dc.getWidth() / 2, startY + i * lineH, font, lines[i],
+                Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
+        }
+    }
+
+    // wrap greedily splits text into lines that each fit within maxWidth pixels.
+    hidden function wrap(dc, text, font, maxWidth) {
+        var words = split(text, " ");
+        var lines = [];
+        var cur = "";
+        for (var i = 0; i < words.size(); i++) {
+            var w = words[i];
+            if (w.length() == 0) {
+                continue;
+            }
+            var candidate = cur.equals("") ? w : cur + " " + w;
+            if (dc.getTextWidthInPixels(candidate, font) <= maxWidth || cur.equals("")) {
+                cur = candidate;
+            } else {
+                lines.add(cur);
+                cur = w;
+            }
+        }
+        if (!cur.equals("")) {
+            lines.add(cur);
+        }
+        return lines;
+    }
+
+    // split breaks a string on a single-character separator (Monkey C has no
+    // built-in String.split on this API level).
+    hidden function split(text, sep) {
+        var out = [];
+        var rest = text;
+        var idx = rest.find(sep);
+        while (idx != null) {
+            out.add(rest.substring(0, idx));
+            rest = rest.substring(idx + sep.length(), rest.length());
+            idx = rest.find(sep);
+        }
+        out.add(rest);
+        return out;
     }
 }
 
