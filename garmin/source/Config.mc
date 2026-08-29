@@ -6,18 +6,23 @@ using Toybox.Time.Gregorian;
 // entered from Garmin Connect Mobile, and holds small shared helpers.
 module Config {
 
+    // serverUrl / token prefer the Garmin Connect setting, but fall back to the
+    // baked-in values in Secrets.mc. The fallback matters for sideloaded builds:
+    // Garmin Connect Mobile can't edit a sideloaded app's settings, and any empty
+    // stored value from a previous install would otherwise win over a compiled
+    // default. See Secrets.mc.example.
     function serverUrl() {
         var v = Application.getApp().getProperty("serverUrl");
-        if (v == null) {
-            return "";
+        if (v == null || v.toString().length() == 0) {
+            return Secrets.SERVER_URL;
         }
         return v.toString();
     }
 
     function token() {
         var v = Application.getApp().getProperty("apiToken");
-        if (v == null) {
-            return "";
+        if (v == null || v.toString().length() == 0) {
+            return Secrets.API_TOKEN;
         }
         return v.toString();
     }

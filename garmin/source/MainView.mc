@@ -40,8 +40,9 @@ class MainView extends WatchUi.View {
         Api.getExercises(method(:onExercises));
     }
 
-    // onExercises receives the exercise list; on success it builds and shows the
-    // picker menu (replacing this view so BACK from the menu exits the app).
+    // onExercises receives the exercise list; on success it shows the day picker
+    // (replacing this view so BACK from the picker exits the app). Choosing a day
+    // then opens that day's exercise list.
     function onExercises(responseCode, data) {
         if (responseCode != 200 || !(data instanceof Toybox.Lang.Array)) {
             mStatus = :error;
@@ -60,17 +61,17 @@ class MainView extends WatchUi.View {
             WatchUi.requestUpdate();
             return;
         }
-        var menu = new WatchUi.Menu2({:title => WatchUi.loadResource(Rez.Strings.ExercisesTitle)});
-        for (var i = 0; i < active.size(); i++) {
-            var ex = active[i];
-            menu.addItem(new WatchUi.MenuItem(
-                ex["name"],
-                Fmt.planned(ex),
-                i,
-                {}
-            ));
+        var days = WorkoutDays.distinct(active);
+        if (days.size() <= 1) {
+            // Single-day routine: skip the picker, go straight to the exercises.
+            var day = (days.size() == 1) ? days[0] : WorkoutDays.DEFAULT;
+            WatchUi.switchToView(
+                WorkoutDays.exerciseMenu(active, day),
+                new ExerciseMenuDelegate(active, day),
+                WatchUi.SLIDE_UP);
+        } else {
+            WatchUi.switchToView(WorkoutDays.menu(active), new DayMenuDelegate(active), WatchUi.SLIDE_UP);
         }
-        WatchUi.switchToView(menu, new ExerciseMenuDelegate(active), WatchUi.SLIDE_UP);
     }
 
     function onUpdate(dc) {

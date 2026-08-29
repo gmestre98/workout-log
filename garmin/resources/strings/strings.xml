@@ -12,6 +12,7 @@
     <string id="Setup">Open Garmin Connect and set the Server URL and Watch token in this app's settings.</string>
     <string id="Loading">Loading…</string>
     <string id="NoExercises">No active exercises.</string>
+    <string id="DayTitle">Workout day</string>
     <string id="ExercisesTitle">Exercises</string>
     <string id="Saving">Saving…</string>
     <string id="Saved">Saved</string>

@@ -3,3 +3,6 @@ bin/
 *.iq
 *.der
 *.pem
+
+# Baked-in server URL + watch token for sideloaded builds (keep local).
+source/Secrets.mc

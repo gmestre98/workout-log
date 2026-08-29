@@ -16,6 +16,7 @@ class WorkoutView extends WatchUi.View {
 
     hidden var mEx;
     hidden var mExId;
+    hidden var mWorkoutDay;    // rotation-day label logged with the day, e.g. "Day 1 - Push"
     hidden var mUnit;
     hidden var mIsTimed;       // true for seconds/minutes exercises
     hidden var mSetDuration;   // seconds, for timed exercises
@@ -27,16 +28,18 @@ class WorkoutView extends WatchUi.View {
     hidden var mSetIndex;      // 0-based index of the current/next set
     hidden var mRemaining;     // countdown seconds (timed set or rest)
     hidden var mElapsed;       // stopwatch seconds (rep set)
+    hidden var mRestElapsed;   // total rest seconds actually spent this exercise
     hidden var mEntries;       // Array of logged set dictionaries
 
     hidden var mTimer;
     hidden var mSaving;
     hidden var mSaved;
 
-    function initialize(ex) {
+    function initialize(ex, workoutDay) {
         View.initialize();
         mEx = ex;
         mExId = ex["id"];
+        mWorkoutDay = workoutDay;
         mUnit = ex["unit"];
         mPlannedAmount = ex["plannedAmount"];
         mRestSeconds = (ex["restSeconds"] == null) ? 0 : ex["restSeconds"];
@@ -50,6 +53,7 @@ class WorkoutView extends WatchUi.View {
         mSetIndex = 0;
         mRemaining = 0;
         mElapsed = 0;
+        mRestElapsed = 0;
         mEntries = [];
         mSaving = false;
         mSaved = false;
@@ -132,6 +136,7 @@ class WorkoutView extends WatchUi.View {
                 mElapsed++;
             }
         } else if (mState == :resting) {
+            mRestElapsed++;
             mRemaining--;
             if (mRemaining <= 0) {
                 finishRest();
@@ -174,8 +179,10 @@ class WorkoutView extends WatchUi.View {
 
     function onDayLoaded(responseCode, data) {
         var exercises = {};
-        if (responseCode == 200 && data != null && data["exercises"] != null) {
-            exercises = data["exercises"];
+        var timeBySource = {};
+        if (responseCode == 200 && data != null) {
+            if (data["exercises"] != null) { exercises = data["exercises"]; }
+            if (data["timeBySource"] != null) { timeBySource = data["timeBySource"]; }
         }
         exercises[mExId] = {
             "exerciseId" => mExId,
@@ -184,9 +191,32 @@ class WorkoutView extends WatchUi.View {
             "unit" => mUnit,
             "sets" => mEntries
         };
+
+        // Add this exercise's timed work (sum of set durations) and the rest taken
+        // during it to the watch's own time bucket, on top of what earlier
+        // exercises in this session already contributed.
+        var trainingSeconds = 0;
+        for (var i = 0; i < mEntries.size(); i++) {
+            var s = mEntries[i]["seconds"];
+            if (s != null) { trainingSeconds += s; }
+        }
+        var prevTrain = 0;
+        var prevRest = 0;
+        var watch = timeBySource["watch"];
+        if (watch != null) {
+            if (watch["trainingSeconds"] != null) { prevTrain = watch["trainingSeconds"]; }
+            if (watch["restSeconds"] != null) { prevRest = watch["restSeconds"]; }
+        }
+        timeBySource["watch"] = {
+            "trainingSeconds" => prevTrain + trainingSeconds,
+            "restSeconds" => prevRest + mRestElapsed
+        };
+
         var body = {
             "date" => Config.today(),
-            "exercises" => exercises
+            "workoutDay" => mWorkoutDay,
+            "exercises" => exercises,
+            "timeBySource" => timeBySource
         };
         Api.putDay(Config.today(), body, method(:onDaySaved));
     }
@@ -210,9 +240,11 @@ class WorkoutView extends WatchUi.View {
         var cx = dc.getWidth() / 2;
         var cy = dc.getHeight() / 2;
 
-        // Header: exercise name.
+        // Header: exercise name, truncated so a long name doesn't run off the
+        // round screen.
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, cy - 78, Gfx.FONT_TINY, mEx["name"], Gfx.TEXT_JUSTIFY_CENTER);
+        var name = truncate(dc, mEx["name"], Gfx.FONT_TINY, (dc.getWidth() * 68) / 100);
+        dc.drawText(cx, cy - 84, Gfx.FONT_TINY, name, Gfx.TEXT_JUSTIFY_CENTER);
 
         if (mState == :saving) {
             drawCenter(dc, cx, cy, WatchUi.loadResource(Rez.Strings.Saving));
@@ -232,46 +264,84 @@ class WorkoutView extends WatchUi.View {
         var counter = WatchUi.loadResource(Rez.Strings.Set) + " "
             + (mSetIndex + 1).toString() + "/" + mTotalSets.toString();
         dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
-        dc.drawText(cx, cy - 44, Gfx.FONT_SMALL, counter, Gfx.TEXT_JUSTIFY_CENTER);
+        var counterY = cy - 52;
+        dc.drawText(cx, counterY, Gfx.FONT_SMALL, counter, Gfx.TEXT_JUSTIFY_CENTER);
+        var counterBottom = counterY + dc.getFontHeight(Gfx.FONT_SMALL);
+
+        var maxW = (dc.getWidth() * 86) / 100;
 
         if (mState == :resting) {
             dc.setColor(Gfx.COLOR_ORANGE, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy - 8, Gfx.FONT_MEDIUM, WatchUi.loadResource(Rez.Strings.Rest),
-                Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
+            dc.drawText(cx, counterBottom + 2, Gfx.FONT_MEDIUM, WatchUi.loadResource(Rez.Strings.Rest),
+                Gfx.TEXT_JUSTIFY_CENTER);
+            var restTop = counterBottom + 2 + dc.getFontHeight(Gfx.FONT_MEDIUM) + 2;
+            var restBottom = cy + 90;
+            var restStr = Fmt.mmss(mRemaining);
+            var restFont = fitNumber(dc, restStr, maxW, restBottom - restTop);
             dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy + 34, Gfx.FONT_NUMBER_MEDIUM, Fmt.mmss(mRemaining),
+            dc.drawText(cx, (restTop + restBottom) / 2, restFont, restStr,
                 Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
             return;
         }
 
-        // Big value: countdown for timed sets, stopwatch for rep sets.
-        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
-        var big;
-        if (mState == :running) {
-            big = mIsTimed ? Fmt.mmss(mRemaining) : Fmt.mmss(mElapsed);
-        } else {
-            // ready: show the target
-            big = mIsTimed ? Fmt.mmss(mSetDuration) : mPlannedAmount.toString();
-        }
-        dc.drawText(cx, cy + 6, Gfx.FONT_NUMBER_HOT, big,
-            Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
-
-        // Footer hint / unit.
-        dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+        // Footer hint (ready) or unit (running).
         var footer;
         if (mState == :ready) {
             footer = WatchUi.loadResource(Rez.Strings.StartHint);
         } else {
             footer = mIsTimed ? "" : Fmt.unitShort(mUnit);
         }
+        var footerY = cy + 66;
+
+        // Big value: countdown for timed sets, stopwatch for rep sets. Sized to
+        // the band between the set counter and the footer so it never overlaps.
+        var big;
+        if (mState == :running) {
+            big = mIsTimed ? Fmt.mmss(mRemaining) : Fmt.mmss(mElapsed);
+        } else {
+            big = mIsTimed ? Fmt.mmss(mSetDuration) : mPlannedAmount.toString();
+        }
+        var bandTop = counterBottom + 4;
+        var bandBottom = footer.equals("") ? (cy + 86) : (footerY - 4);
+        var bigFont = fitNumber(dc, big, maxW, bandBottom - bandTop);
+        dc.setColor(Gfx.COLOR_WHITE, Gfx.COLOR_TRANSPARENT);
+        dc.drawText(cx, (bandTop + bandBottom) / 2, bigFont, big,
+            Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
+
         if (!footer.equals("")) {
-            dc.drawText(cx, cy + 60, Gfx.FONT_TINY, footer, Gfx.TEXT_JUSTIFY_CENTER);
+            dc.setColor(Gfx.COLOR_LT_GRAY, Gfx.COLOR_TRANSPARENT);
+            dc.drawText(cx, footerY, Gfx.FONT_TINY, footer, Gfx.TEXT_JUSTIFY_CENTER);
         }
     }
 
     hidden function drawCenter(dc, cx, cy, text) {
         dc.drawText(cx, cy, Gfx.FONT_MEDIUM, text,
             Gfx.TEXT_JUSTIFY_CENTER | Gfx.TEXT_JUSTIFY_VCENTER);
+    }
+
+    // fitNumber returns the largest number font whose rendering of `text` fits
+    // within both maxWidth and maxHeight, so big values never overflow the round
+    // screen or collide with the labels above/below them.
+    hidden function fitNumber(dc, text, maxWidth, maxHeight) {
+        var fonts = [Gfx.FONT_NUMBER_HOT, Gfx.FONT_NUMBER_MEDIUM, Gfx.FONT_NUMBER_MILD, Gfx.FONT_LARGE, Gfx.FONT_MEDIUM];
+        for (var i = 0; i < fonts.size(); i++) {
+            if (dc.getTextWidthInPixels(text, fonts[i]) <= maxWidth && dc.getFontHeight(fonts[i]) <= maxHeight) {
+                return fonts[i];
+            }
+        }
+        return fonts[fonts.size() - 1];
+    }
+
+    // truncate shortens `text` with a trailing "..." until it fits maxWidth.
+    hidden function truncate(dc, text, font, maxWidth) {
+        if (dc.getTextWidthInPixels(text, font) <= maxWidth) {
+            return text;
+        }
+        var s = text;
+        while (s.length() > 1 && dc.getTextWidthInPixels(s + "...", font) > maxWidth) {
+            s = s.substring(0, s.length() - 1);
+        }
+        return s + "...";
     }
 }
 
