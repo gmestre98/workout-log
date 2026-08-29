@@ -7,6 +7,7 @@ import {
   formatPercent, newLog, nextWorkoutDay, orderedWorkoutDays, routineForDate, setMeta, slotColor, todayISO,
 } from "../format";
 import { getTravelMode, setTravelMode, getTravelOff, setTravelOff } from "../travel";
+import { clockTotals, workoutClock } from "../timer";
 import { Ring } from "./Ring";
 import { LogSheet } from "./LogSheet";
 import { WorkoutClock } from "./WorkoutClock";
@@ -190,10 +191,20 @@ export function Today({ email }: { email: string }) {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setSaving(true);
     saveTimer.current = setTimeout(() => {
+      // Stamp this browser's own time bucket (leaving other sources, e.g. the
+      // watch, untouched) so the day's total stays correct across devices.
+      const t = clockTotals(workoutClock.get(next.date), Date.now());
+      const withTime: DayLog = {
+        ...next,
+        timeBySource: {
+          ...(next.timeBySource ?? {}),
+          app: { trainingSeconds: Math.round(t.trainingMs / 1000), restSeconds: Math.round(t.restMs / 1000) },
+        },
+      };
       // Local-first: the day is persisted to storage synchronously and pushed
       // to the server in the background, so an offline edit is never lost. The
       // streak dots can update immediately off the just-saved state.
-      saveDay(next);
+      saveDay(withTime);
       // Keep the rotation map current so the next session advances correctly.
       setWorkoutDayByDate((prev) => new Map(prev).set(next.date, next.workoutDay));
       if (next.date === today) {
@@ -210,6 +221,19 @@ export function Today({ email }: { email: string }) {
     (ex: Exercise): ExerciseLog => day?.exercises[ex.id] ?? newLog(ex),
     [day]
   );
+
+  // Workout time this day recorded on other devices (the watch), summed across
+  // every source except this browser's own, to fold into the on-screen clock.
+  const externalTime = useMemo(() => {
+    let t = 0;
+    let r = 0;
+    for (const [source, v] of Object.entries(day?.timeBySource ?? {})) {
+      if (source === "app") continue;
+      t += v.trainingSeconds ?? 0;
+      r += v.restSeconds ?? 0;
+    }
+    return { trainingMs: t * 1000, restMs: r * 1000 };
+  }, [day]);
 
   const update = useCallback(
     (ex: Exercise, mutate: (log: ExerciseLog) => ExerciseLog) => {
@@ -433,7 +457,8 @@ export function Today({ email }: { email: string }) {
       </div>
 
       {date === today && exercises.length > 0 && (
-        <WorkoutClock date={today} exercises={exercises} logFor={logFor} onLogSet={logSet} />
+        <WorkoutClock date={today} exercises={exercises} logFor={logFor} onLogSet={logSet}
+          externalTrainingMs={externalTime.trainingMs} externalRestMs={externalTime.restMs} />
       )}
 
       {error && <p className="error">{error}</p>}

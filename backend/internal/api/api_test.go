@@ -162,6 +162,33 @@ func TestSaveAndGetDay(t *testing.T) {
 	}
 }
 
+func TestSaveDayTimeBySourceMerge(t *testing.T) {
+	srv, _ := newServer()
+	defer srv.Close()
+	// The watch records its time first.
+	watch := domain.DayLog{TimeBySource: map[string]domain.SessionTime{
+		"watch": {TrainingSeconds: 100, RestSeconds: 30},
+	}}
+	do(t, http.MethodPut, srv.URL+"/api/days/2026-07-18", watch).Body.Close()
+
+	// The app later saves with only its own bucket; the watch bucket must survive.
+	app := domain.DayLog{TimeBySource: map[string]domain.SessionTime{
+		"app": {TrainingSeconds: 50, RestSeconds: 20},
+	}}
+	do(t, http.MethodPut, srv.URL+"/api/days/2026-07-18", app).Body.Close()
+
+	resp := do(t, http.MethodGet, srv.URL+"/api/days/2026-07-18", nil)
+	var got domain.DayLog
+	json.NewDecoder(resp.Body).Decode(&got)
+	resp.Body.Close()
+	if got.TimeBySource["watch"].TrainingSeconds != 100 || got.TimeBySource["app"].TrainingSeconds != 50 {
+		t.Fatalf("buckets not both preserved: %+v", got.TimeBySource)
+	}
+	if got.TrainingSeconds() != 150 || got.RestSeconds() != 50 {
+		t.Fatalf("totals wrong: training=%d rest=%d", got.TrainingSeconds(), got.RestSeconds())
+	}
+}
+
 func TestBadDateRejected(t *testing.T) {
 	srv, _ := newServer()
 	defer srv.Close()

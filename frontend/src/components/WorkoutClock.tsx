@@ -23,11 +23,17 @@ export function WorkoutClock({
   exercises,
   logFor,
   onLogSet,
+  externalTrainingMs = 0,
+  externalRestMs = 0,
 }: {
   date: string;
   exercises: Exercise[];
   logFor: (ex: Exercise) => ExerciseLog;
   onLogSet: (ex: Exercise, amount: number, seconds: number) => void;
+  // Workout time recorded on other devices (e.g. the watch) for this day, folded
+  // into the totals shown here so the session adds up across devices.
+  externalTrainingMs?: number;
+  externalRestMs?: number;
 }) {
   const session = useWorkoutClock(date);
   const paused = session.paused;
@@ -130,8 +136,13 @@ export function WorkoutClock({
       ? `Log ${logWord}${setElapsedMs > 0 ? ` · ${formatDuration(setElapsedMs)}` : ""}`
       : `Log ${logWord} · ${repVal} ${unitLabel(unit)}`;
 
-  const total = Math.max(session.totalMs, 1);
-  const trainPct = (session.trainingMs / total) * 100;
+  // Fold in time recorded on other devices (the watch) so the figures reflect
+  // the whole day's session, not just what this browser stopwatched.
+  const trainingMs = session.trainingMs + externalTrainingMs;
+  const restMs = session.restMs + externalRestMs;
+  const totalMs = trainingMs + restMs;
+  const total = Math.max(totalMs, 1);
+  const trainPct = (trainingMs / total) * 100;
   const runningWorkout = session.training || session.resting;
   const workoutState = paused
     ? "Workout stopped"
@@ -211,7 +222,7 @@ export function WorkoutClock({
         <div className="clock-sum-top">
           <div>
             <span className="clock-lab">{workoutState}</span>
-            <div className="clock-total-big num">{formatDuration(session.totalMs)}</div>
+            <div className="clock-total-big num">{formatDuration(totalMs)}</div>
           </div>
           {runningWorkout ? (
             <button className="clock-btn" onClick={pauseWorkout}>
@@ -227,8 +238,8 @@ export function WorkoutClock({
           <span className="fill train" style={{ width: `${trainPct}%` }} />
         </div>
         <div className="clock-bar-legend">
-          <span className="lg"><i className="dot train" />Work <b className="num">{formatDuration(session.trainingMs)}</b></span>
-          <span className="lg"><i className="dot rest" />Rest <b className="num">{formatDuration(session.restMs)}</b></span>
+          <span className="lg"><i className="dot train" />Work <b className="num">{formatDuration(trainingMs)}</b></span>
+          <span className="lg"><i className="dot rest" />Rest <b className="num">{formatDuration(restMs)}</b></span>
         </div>
         <div style={{ textAlign: "center", marginTop: 4 }}>
           <button className="link" onClick={() => setConfirmReset(true)} disabled={!session.started && setElapsedMs === 0}>

@@ -133,6 +133,52 @@ type DayLog struct {
 	// replacement used it.
 	TravelOff []string               `json:"travelOff,omitempty" firestore:"travelOff,omitempty"`
 	Exercises map[string]ExerciseLog `json:"exercises" firestore:"exercises"`
+	// TimeBySource is the workout time spent on this day, split by the device that
+	// recorded it ("app", "watch"). Each source owns and overwrites only its own
+	// bucket, so devices don't clobber each other; the day's total time is the sum
+	// across sources. This lets a session split across the phone and the watch add
+	// up to one figure. Absent for days logged before time tracking existed.
+	TimeBySource map[string]SessionTime `json:"timeBySource,omitempty" firestore:"timeBySource,omitempty"`
+}
+
+// SessionTime is workout time recorded by one source, split into active training
+// (a set being timed) and rest (everything else once started), in whole seconds.
+type SessionTime struct {
+	TrainingSeconds int `json:"trainingSeconds" firestore:"trainingSeconds"`
+	RestSeconds     int `json:"restSeconds" firestore:"restSeconds"`
+}
+
+// TrainingSeconds returns the day's total active training time across all sources.
+func (d DayLog) TrainingSeconds() int {
+	total := 0
+	for _, t := range d.TimeBySource {
+		total += t.TrainingSeconds
+	}
+	return total
+}
+
+// RestSeconds returns the day's total rest time across all sources.
+func (d DayLog) RestSeconds() int {
+	total := 0
+	for _, t := range d.TimeBySource {
+		total += t.RestSeconds
+	}
+	return total
+}
+
+// MergeTimeBySource overlays src onto d's TimeBySource, replacing each provided
+// source's bucket while preserving buckets for sources not present in src. Used
+// when saving a day so one device's write updates only its own time.
+func (d *DayLog) MergeTimeBySource(src map[string]SessionTime) {
+	if len(src) == 0 {
+		return
+	}
+	if d.TimeBySource == nil {
+		d.TimeBySource = map[string]SessionTime{}
+	}
+	for k, v := range src {
+		d.TimeBySource[k] = v
+	}
 }
 
 // NewDayLog returns an empty, ready-to-use DayLog for date.

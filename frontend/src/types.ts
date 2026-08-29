@@ -72,6 +72,18 @@ export interface DayLog {
   // on (the user had the equipment for those). Absent means all travel.
   travelOff?: string[];
   exercises: Record<string, ExerciseLog>;
+  // Workout time spent on this day, split by the device that recorded it
+  // ("app", "watch"). Each source owns its own bucket so devices don't clobber
+  // each other; the day's total time is the sum across sources. Absent for days
+  // logged before time tracking existed.
+  timeBySource?: Record<string, SessionTime>;
+}
+
+// SessionTime is workout time from one source, split into active training and
+// rest, in whole seconds.
+export interface SessionTime {
+  trainingSeconds: number;
+  restSeconds: number;
 }
 
 export interface DayStat {

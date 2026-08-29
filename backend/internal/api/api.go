@@ -276,6 +276,17 @@ func (h *Handler) saveDay(w http.ResponseWriter, r *http.Request) {
 	if d.Exercises == nil {
 		d.Exercises = map[string]domain.ExerciseLog{}
 	}
+	// Workout time is additive per source: preserve buckets from other devices
+	// (e.g. the watch's time when the app saves) and overlay only the sources the
+	// caller sent. Everything else in the DayLog is a full replace, as before.
+	incomingTime := d.TimeBySource
+	existing, err := h.store.GetDay(r.Context(), date)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	d.TimeBySource = existing.TimeBySource
+	d.MergeTimeBySource(incomingTime)
 	if err := h.store.SaveDay(r.Context(), d); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
