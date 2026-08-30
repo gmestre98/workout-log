@@ -588,16 +588,69 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	active := activeExercises(exercises)
+	days, err := h.store.ListDays(r.Context(), from, to)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	forDay, err := h.exercisesForDay(r.Context(), active)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, stats.SummarizeWith(forDay, days))
+}
+
+// exercisesForDay builds a resolver that returns the routine in effect on each
+// date, so a period spanning a routine switch is scored against the version that
+// actually applied on every day. It reads the assignment timeline (the version
+// in effect on date D is the assignment with the greatest StartDate <= D) and
+// resolves each version to its saved exercise snapshot. Days before the first
+// assignment, and any version that fails to resolve, fall back to fallback (the
+// current active routine), preserving the pre-schedule behaviour.
+func (h *Handler) exercisesForDay(ctx context.Context, fallback []domain.Exercise) (stats.ExercisesForDay, error) {
+	assignments, err := h.store.ListVersionAssignments(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(assignments) == 0 {
+		return func(string) []domain.Exercise { return fallback }, nil
+	}
+	// Resolve each referenced version once.
+	byVersion := make(map[string][]domain.Exercise, len(assignments))
+	for _, a := range assignments {
+		if _, ok := byVersion[a.VersionID]; ok {
+			continue
+		}
+		v, err := h.store.GetRoutineVersion(ctx, a.VersionID)
+		if err != nil {
+			// A dangling assignment: score those days against the current routine.
+			byVersion[a.VersionID] = fallback
+			continue
+		}
+		byVersion[a.VersionID] = activeExercises(v.Exercises)
+	}
+	// assignments are oldest StartDate first (store contract).
+	return func(date string) []domain.Exercise {
+		ex := fallback
+		for _, a := range assignments {
+			if a.StartDate > date {
+				break
+			}
+			ex = byVersion[a.VersionID]
+		}
+		return ex
+	}, nil
+}
+
+// activeExercises returns only the active exercises, preserving order.
+func activeExercises(exercises []domain.Exercise) []domain.Exercise {
 	active := make([]domain.Exercise, 0, len(exercises))
 	for _, e := range exercises {
 		if e.Active {
 			active = append(active, e)
 		}
 	}
-	days, err := h.store.ListDays(r.Context(), from, to)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, stats.Summarize(active, days))
+	return active
 }

@@ -217,6 +217,47 @@ func TestSummary(t *testing.T) {
 	}
 }
 
+// TestSummaryAcrossRoutineSwitch checks that a period spanning a mid-month
+// routine switch scores each day against the routine that was in effect then,
+// not the current one. old-ex is fully logged before the switch and new-ex fully
+// logged after; the current routine holds only new-ex. Without version-aware
+// scoring, the pre-switch day would be scored against new-ex (no log → 0%),
+// wrongly dropping it below DaysAbove0.
+func TestSummaryAcrossRoutineSwitch(t *testing.T) {
+	srv, m := newServer()
+	defer srv.Close()
+	ctx := context.Background()
+
+	oldEx := domain.Exercise{ID: "old-ex", Name: "Old", TimeSlot: "Wake up", Unit: domain.UnitReps, PlannedSets: 1, PlannedAmount: 10, Active: true}
+	newEx := domain.Exercise{ID: "new-ex", Name: "New", TimeSlot: "Wake up", Unit: domain.UnitReps, PlannedSets: 1, PlannedAmount: 10, Active: true}
+
+	// Current routine is the new one only.
+	m.CreateExercise(ctx, newEx)
+
+	// Saved snapshots of each routine, scheduled across the month.
+	vOld, _ := m.CreateRoutineVersion(ctx, domain.RoutineVersion{Exercises: []domain.Exercise{oldEx}})
+	vNew, _ := m.CreateRoutineVersion(ctx, domain.RoutineVersion{Exercises: []domain.Exercise{newEx}})
+	m.SetVersionAssignment(ctx, domain.VersionAssignment{StartDate: "2026-08-01", VersionID: vOld.ID})
+	m.SetVersionAssignment(ctx, domain.VersionAssignment{StartDate: "2026-08-15", VersionID: vNew.ID})
+
+	logOf := func(id string) domain.ExerciseLog {
+		return domain.ExerciseLog{ExerciseID: id, PlannedSets: 1, PlannedAmount: 10, Sets: []domain.SetEntry{{Completed: true, ActualAmount: 10}}}
+	}
+	m.SaveDay(ctx, domain.DayLog{Date: "2026-08-05", Exercises: map[string]domain.ExerciseLog{oldEx.ID: logOf(oldEx.ID)}})
+	m.SaveDay(ctx, domain.DayLog{Date: "2026-08-20", Exercises: map[string]domain.ExerciseLog{newEx.ID: logOf(newEx.ID)}})
+
+	resp := do(t, http.MethodGet, srv.URL+"/api/summary?from=2026-08-01&to=2026-08-31", nil)
+	var s stats.Summary
+	json.NewDecoder(resp.Body).Decode(&s)
+	resp.Body.Close()
+	if s.Days != 2 || s.DaysAbove0 != 2 || s.DaysAbove50 != 2 {
+		t.Fatalf("switch-spanning summary wrong: %+v", s)
+	}
+	if s.AvgCompletion != 1 {
+		t.Fatalf("both days fully done, want avg 1, got %v", s.AvgCompletion)
+	}
+}
+
 func TestSummaryRequiresDates(t *testing.T) {
 	srv, _ := newServer()
 	defer srv.Close()

@@ -88,13 +88,27 @@ type Summary struct {
 	PerDay        []DayStat `json:"perDay"`
 }
 
+// ExercisesForDay resolves which routine exercises were in effect on a given
+// date ("YYYY-MM-DD"). It lets a summary score each day against the routine that
+// actually applied then, which matters when the routine was switched mid-period.
+type ExercisesForDay func(date string) []domain.Exercise
+
 // Summarize computes a Summary over the provided days against the routine.
 // The caller chooses which days to include (e.g. every logged day in a month).
 func Summarize(exercises []domain.Exercise, days []domain.DayLog) Summary {
+	return SummarizeWith(func(string) []domain.Exercise { return exercises }, days)
+}
+
+// SummarizeWith is like Summarize but scores each day against the routine that
+// was in effect on that day, as resolved by forDay. This keeps period stats
+// correct across a mid-period routine switch: without it, days logged under the
+// old routine would be scored against the new routine's exercises (which have no
+// logs on those days and so count as 0%), dragging the whole period down.
+func SummarizeWith(forDay ExercisesForDay, days []domain.DayLog) Summary {
 	s := Summary{Days: len(days), PerDay: make([]DayStat, 0, len(days))}
 	var total float64
 	for _, d := range days {
-		avg := DayAverage(exercises, d)
+		avg := DayAverage(forDay(d.Date), d)
 		total += avg
 		if avg > 0 {
 			s.DaysAbove0++

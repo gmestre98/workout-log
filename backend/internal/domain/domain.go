@@ -213,8 +213,9 @@ func (s VersionStatus) Valid() bool {
 // (start on any day) without gaps or overlaps. StartDate ("YYYY-MM-DD") is the
 // document ID, so each boundary date maps to exactly one version.
 //
-// The schedule is a record/label only: it documents which version applied when
-// and does not change which exercises the daily tracking or stats use.
+// The schedule drives period stats: each day is scored against the version in
+// effect on it, so a summary spanning a mid-period routine switch stays correct
+// (see stats.SummarizeWith). Daily tracking still uses the current routine.
 type VersionAssignment struct {
 	StartDate string `json:"startDate" firestore:"startDate"`
 	VersionID string `json:"versionId" firestore:"versionId"`
