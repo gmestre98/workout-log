@@ -112,13 +112,19 @@ class WorkoutView extends WatchUi.View {
             mRemaining = mRestSeconds;
             startTimer();
         } else {
+            // No configured rest countdown, but idle time between sets still
+            // counts as rest (like the phone), so keep the clock running.
             mState = :ready;
+            startTimer();
         }
         WatchUi.requestUpdate();
     }
 
+    // finishRest ends the rest *countdown* but does NOT stop the clock: the phone
+    // counts all non-training time as rest, so idle time in :ready keeps accruing
+    // rest until the next set starts or the exercise is left. Called both when the
+    // countdown reaches zero and when the user presses START to skip it.
     hidden function finishRest() {
-        stopTimer();
         buzz();
         mState = :ready;
         WatchUi.requestUpdate();
@@ -142,6 +148,9 @@ class WorkoutView extends WatchUi.View {
                 finishRest();
                 return;
             }
+        } else if (mState == :ready) {
+            // Idle between sets once the workout has started counts as rest.
+            if (mEntries.size() > 0) { mRestElapsed++; }
         }
         WatchUi.requestUpdate();
     }
