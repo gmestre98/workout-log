@@ -117,25 +117,9 @@ func loggedIDs(day domain.DayLog) map[string]bool {
 	return s
 }
 
-// jaccard is |a∩b| / |a∪b|, 0 when both are empty. It rewards the routine that
-// overlaps a day's exercises most while penalising a routine that is much larger
-// than the day (so a day belongs to the routine it actually fits, not a superset).
-func jaccard(a, b map[string]bool) float64 {
-	if len(a) == 0 && len(b) == 0 {
-		return 0
-	}
-	inter := 0
-	for id := range a {
-		if b[id] {
-			inter++
-		}
-	}
-	union := len(a) + len(b) - inter
-	if union == 0 {
-		return 0
-	}
-	return float64(inter) / float64(union)
-}
+// jaccard overlaps two exercise-ID sets; see stats.Jaccard. Kept as a local
+// alias so the attribution code below reads naturally.
+func jaccard(a, b map[string]bool) float64 { return stats.Jaccard(a, b) }
 
 // attribute returns the index of the routine a day belongs to, or -1 when the
 // day has no logged exercises. routines must be newest-first, so ties resolve to

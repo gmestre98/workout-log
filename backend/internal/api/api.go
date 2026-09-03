@@ -602,46 +602,33 @@ func (h *Handler) summary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, stats.SummarizeWith(forDay, days))
 }
 
-// exercisesForDay builds a resolver that returns the routine in effect on each
-// date, so a period spanning a routine switch is scored against the version that
-// actually applied on every day. It reads the assignment timeline (the version
-// in effect on date D is the assignment with the greatest StartDate <= D) and
-// resolves each version to its saved exercise snapshot. Days before the first
-// assignment, and any version that fails to resolve, fall back to fallback (the
-// current active routine), preserving the pre-schedule behaviour.
+// exercisesForDay builds a resolver that scores each day against the routine it
+// belongs to, so a period spanning a routine switch is not dragged down by
+// pre-switch days scoring 0% against the current routine. A day is attributed
+// first by the version schedule (the assignment in effect on its date), then —
+// when no schedule entry covers it — by which saved version's exercises its logs
+// best match. That fallback matters because activating a version switches the
+// routine WITHOUT writing a schedule entry, so most real switches leave no dated
+// boundary to go on. The current active routine (fallback) is used only when a
+// day matches nothing, e.g. before any routine was saved.
 func (h *Handler) exercisesForDay(ctx context.Context, fallback []domain.Exercise) (stats.ExercisesForDay, error) {
+	versions, err := h.store.ListRoutineVersions(ctx)
+	if err != nil {
+		return nil, err
+	}
 	assignments, err := h.store.ListVersionAssignments(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if len(assignments) == 0 {
-		return func(string) []domain.Exercise { return fallback }, nil
+	// Candidate routines, newest first (ListRoutineVersions is newest-first), so
+	// match ties resolve to the newest routine. The current routine is included as
+	// a fallback candidate for days that best match it but predate its save.
+	routines := make([]stats.Routine, 0, len(versions)+1)
+	for _, v := range versions {
+		routines = append(routines, stats.Routine{VersionID: v.ID, Exercises: activeExercises(v.Exercises)})
 	}
-	// Resolve each referenced version once.
-	byVersion := make(map[string][]domain.Exercise, len(assignments))
-	for _, a := range assignments {
-		if _, ok := byVersion[a.VersionID]; ok {
-			continue
-		}
-		v, err := h.store.GetRoutineVersion(ctx, a.VersionID)
-		if err != nil {
-			// A dangling assignment: score those days against the current routine.
-			byVersion[a.VersionID] = fallback
-			continue
-		}
-		byVersion[a.VersionID] = activeExercises(v.Exercises)
-	}
-	// assignments are oldest StartDate first (store contract).
-	return func(date string) []domain.Exercise {
-		ex := fallback
-		for _, a := range assignments {
-			if a.StartDate > date {
-				break
-			}
-			ex = byVersion[a.VersionID]
-		}
-		return ex
-	}, nil
+	routines = append(routines, stats.Routine{Exercises: fallback})
+	return stats.ResolveExercisesForDay(routines, assignments, fallback), nil
 }
 
 // activeExercises returns only the active exercises, preserving order.

@@ -258,6 +258,45 @@ func TestSummaryAcrossRoutineSwitch(t *testing.T) {
 	}
 }
 
+// TestSummaryRoutineSwitchNoSchedule is the real-world case: the routine was
+// switched by activating a new version (which does NOT write a schedule entry),
+// so there are saved versions but no assignments. Pre-switch days must still be
+// attributed to the old version by exercise overlap, not scored 0% against the
+// current routine. Reproduces "August shows fewer active days than I had".
+func TestSummaryRoutineSwitchNoSchedule(t *testing.T) {
+	srv, m := newServer()
+	defer srv.Close()
+	ctx := context.Background()
+
+	oldEx := domain.Exercise{ID: "old-ex", Name: "Old", TimeSlot: "Wake up", Unit: domain.UnitReps, PlannedSets: 1, PlannedAmount: 10, Active: true}
+	newEx := domain.Exercise{ID: "new-ex", Name: "New", TimeSlot: "Wake up", Unit: domain.UnitReps, PlannedSets: 1, PlannedAmount: 10, Active: true}
+
+	// Current live routine is the new one; both routines are saved as versions.
+	m.CreateExercise(ctx, newEx)
+	m.CreateRoutineVersion(ctx, domain.RoutineVersion{Exercises: []domain.Exercise{oldEx}})
+	m.CreateRoutineVersion(ctx, domain.RoutineVersion{Exercises: []domain.Exercise{newEx}, Status: domain.StatusCurrent})
+	// No SetVersionAssignment: activating a version leaves no dated boundary.
+
+	logOf := func(id string) domain.ExerciseLog {
+		return domain.ExerciseLog{ExerciseID: id, PlannedSets: 1, PlannedAmount: 10, Sets: []domain.SetEntry{{Completed: true, ActualAmount: 10}}}
+	}
+	// Two old-routine days and one new-routine day, all fully done.
+	m.SaveDay(ctx, domain.DayLog{Date: "2026-08-03", Exercises: map[string]domain.ExerciseLog{oldEx.ID: logOf(oldEx.ID)}})
+	m.SaveDay(ctx, domain.DayLog{Date: "2026-08-08", Exercises: map[string]domain.ExerciseLog{oldEx.ID: logOf(oldEx.ID)}})
+	m.SaveDay(ctx, domain.DayLog{Date: "2026-08-25", Exercises: map[string]domain.ExerciseLog{newEx.ID: logOf(newEx.ID)}})
+
+	resp := do(t, http.MethodGet, srv.URL+"/api/summary?from=2026-08-01&to=2026-08-31", nil)
+	var s stats.Summary
+	json.NewDecoder(resp.Body).Decode(&s)
+	resp.Body.Close()
+	if s.DaysAbove0 != 3 || s.DaysAbove50 != 3 {
+		t.Fatalf("all 3 days done, want DaysAbove0/50 = 3: %+v", s)
+	}
+	if s.AvgCompletion != 1 {
+		t.Fatalf("all days fully done, want avg 1, got %v", s.AvgCompletion)
+	}
+}
+
 func TestSummaryRequiresDates(t *testing.T) {
 	srv, _ := newServer()
 	defer srv.Close()
