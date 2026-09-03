@@ -20,6 +20,7 @@ import {
   firstOfMonth,
   monthLabel,
   routineForDate,
+  activeRoutineForDay,
   setMeta,
   dayOf,
   orderedWorkoutDays,
@@ -387,11 +388,42 @@ describe("primaryMuscle", () => {
   });
 });
 
+describe("activeRoutineForDay", () => {
+  const oldEx = ex("old-ex", { muscleGroup: "Back" });
+  const newEx = ex("new-ex", { muscleGroup: "Chest" });
+  const versions = [
+    { id: "vNew", status: "current", exercises: [newEx] },
+    { id: "vOld", status: "past", exercises: [oldEx] },
+  ];
+  const live = [newEx];
+
+  it("uses the scheduled version when the schedule covers the date", () => {
+    const schedule = [
+      { startDate: "2026-08-01", versionId: "vOld" },
+      { startDate: "2026-08-15", versionId: "vNew" },
+    ];
+    expect(activeRoutineForDay(day("2026-08-05", ["old-ex"]), schedule, versions, live).map((e) => e.id)).toEqual(["old-ex"]);
+    // Current version's dates resolve to the editable live routine.
+    expect(activeRoutineForDay(day("2026-08-20", ["new-ex"]), schedule, versions, live).map((e) => e.id)).toEqual(["new-ex"]);
+  });
+
+  it("falls back to exercise overlap when no schedule entry exists (activated version)", () => {
+    // No schedule: a day logging the old routine's exercise must still resolve to
+    // the old version, not the current live routine — the real switch scenario.
+    expect(activeRoutineForDay(day("2026-08-05", ["old-ex"]), [], versions, live).map((e) => e.id)).toEqual(["old-ex"]);
+    expect(activeRoutineForDay(day("2026-08-20", ["new-ex"]), [], versions, live).map((e) => e.id)).toEqual(["new-ex"]);
+  });
+
+  it("falls back to the live routine for an empty day", () => {
+    expect(activeRoutineForDay(day("2026-08-05", []), [], versions, live).map((e) => e.id)).toEqual(["new-ex"]);
+  });
+});
+
 describe("muscleBreakdown", () => {
   it("groups exercises by primary muscle and averages, sorted desc", () => {
     const exs = [ex("a", { muscleGroup: "Core" }), ex("b", { muscleGroup: "Legs (Quads)" })];
     const days = [day("2026-07-01", ["a"])]; // a=100%, b=0%
-    const result = muscleBreakdown(exs, days);
+    const result = muscleBreakdown(days, () => exs);
     expect(result[0]).toEqual({ group: "Core", completion: 1 });
     expect(result[1]).toEqual({ group: "Legs", completion: 0 });
   });

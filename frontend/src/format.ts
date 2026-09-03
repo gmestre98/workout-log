@@ -212,29 +212,38 @@ export interface MuscleStat {
 }
 
 // muscleBreakdown averages each exercise's completion over the period, then
-// groups by primary muscle. Missing logs count as 0% (consistency with the
-// day average). Returns groups sorted by completion descending.
-export function muscleBreakdown(exercises: Exercise[], days: DayLog[]): MuscleStat[] {
-  const groups = new Map<string, { sum: number; count: number }>();
-  for (const ex of exercises) {
-    // Only days on which this exercise's workout was performed count toward its
-    // average: a rotation day (workoutDay set) that isn't this exercise's day
-    // would otherwise drag it down as a 0%. Legacy days (no workoutDay) always
-    // count, matching the whole-routine behaviour.
-    let exSum = 0;
-    let n = 0;
-    for (const day of days) {
-      if (day.workoutDay && day.workoutDay !== dayOf(ex)) continue;
-      n++;
+// groups by primary muscle. Missing logs count as 0% (consistency with the day
+// average). Returns groups sorted by completion descending.
+//
+// routineForDay resolves each day to the routine it should be scored against, so
+// a period spanning a routine switch attributes each day to its own routine —
+// exercises that weren't in the current routine still count on the days they
+// were trained, instead of being dropped. Only days on which an exercise's
+// workout was performed count toward its average: a rotation day (workoutDay
+// set) that isn't this exercise's day would otherwise drag it down as a 0%;
+// legacy days (no workoutDay) always count, matching the whole-routine average.
+export function muscleBreakdown(days: DayLog[], routineForDay: (d: DayLog) => Exercise[]): MuscleStat[] {
+  const perEx = new Map<string, { sum: number; count: number; group: string }>();
+  for (const day of days) {
+    const routine = routineForDay(day);
+    const wd = day.workoutDay;
+    const scoped = !!wd && routine.some((e) => dayOf(e) === wd);
+    for (const ex of routine) {
+      if (scoped && dayOf(ex) !== wd) continue;
+      const cur = perEx.get(ex.id) ?? { sum: 0, count: 0, group: primaryMuscle(ex.muscleGroup) };
       const log = day.exercises[ex.id];
-      exSum += log ? exerciseCompletion(log) : 0;
+      cur.sum += log ? exerciseCompletion(log) : 0;
+      cur.count += 1;
+      perEx.set(ex.id, cur);
     }
-    const exAvg = n > 0 ? exSum / n : 0;
-    const key = primaryMuscle(ex.muscleGroup);
-    const g = groups.get(key) ?? { sum: 0, count: 0 };
+  }
+  const groups = new Map<string, { sum: number; count: number }>();
+  for (const { sum, count, group } of perEx.values()) {
+    const exAvg = count > 0 ? sum / count : 0;
+    const g = groups.get(group) ?? { sum: 0, count: 0 };
     g.sum += exAvg;
     g.count += 1;
-    groups.set(key, g);
+    groups.set(group, g);
   }
   return [...groups.entries()]
     .map(([group, g]) => ({ group, completion: g.count ? g.sum / g.count : 0 }))
@@ -273,6 +282,66 @@ export function routineForDate<E extends { active: boolean; sortOrder: number }>
   const v = versions.find((x) => x.id === vid);
   if (!v || v.exercises.length === 0) return live;
   return [...v.exercises].sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+// jaccard is |a∩b| / |a∪b| over two exercise-id sets, 0 when both are empty. It
+// rewards the routine that overlaps a day's exercises most while penalising a
+// routine far larger than the day, so a day is matched to the routine it fits.
+// Mirrors the backend stats.Jaccard.
+export function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 0;
+  let inter = 0;
+  for (const id of a) if (b.has(id)) inter++;
+  const union = a.size + b.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+// activeRoutineForDay returns the active exercises a single day should be scored
+// against, mirroring the backend stats.ResolveExercisesForDay. A day is
+// attributed by, in order: the version schedule (the assignment in effect on its
+// date), then — when no schedule entry covers the day — the saved version whose
+// exercises the day's logs best overlap. That overlap fallback is essential
+// because activating a version switches the routine WITHOUT writing a schedule
+// entry, so most real switches leave no dated boundary; without it, days logged
+// under the previous routine score 0% against the current one and are lost from
+// "active days" and the average. The current live routine is the final fallback
+// (e.g. an empty day, which scores 0% regardless).
+export function activeRoutineForDay(
+  day: DayLog,
+  schedule: { startDate: string; versionId: string }[],
+  versions: { id: string; status: string; exercises: Exercise[] }[],
+  live: Exercise[]
+): Exercise[] {
+  const liveActive = live.filter((e) => e.active);
+  const sorted = (exs: Exercise[]) => [...exs].filter((e) => e.active).sort((a, b) => a.sortOrder - b.sortOrder);
+
+  // 1. Version schedule.
+  const vid = effectiveVersionId(schedule, day.date);
+  if (vid) {
+    const current = versions.find((v) => v.status === "current");
+    if (current && vid === current.id) return liveActive; // current → editable live routine
+    const v = versions.find((x) => x.id === vid);
+    if (v && v.exercises.length > 0) return sorted(v.exercises);
+  }
+
+  // 2. Best exercise-overlap match among saved versions (newest first) then live.
+  const logged = new Set(Object.keys(day.exercises));
+  if (logged.size > 0) {
+    const candidates = [...versions.map((v) => sorted(v.exercises)), liveActive];
+    let best: Exercise[] | null = null;
+    let bestScore = 0;
+    for (const c of candidates) {
+      const sc = jaccard(logged, new Set(c.map((e) => e.id)));
+      if (sc > bestScore) {
+        bestScore = sc;
+        best = c;
+      }
+    }
+    if (best) return best;
+  }
+
+  // 3. Fallback: the current routine.
+  return liveActive;
 }
 
 // orderedWorkoutDays lists the distinct workout days (the rotation units) in the
