@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { DayLog, Exercise, RoutineVersion, VersionAssignment } from "../types";
+import { DEFAULT_WORKOUT_DAY } from "../types";
 import {
-  activeRoutineForDay, addDaysISO, computeStreak, dayCompletion, formatPercent, monthRange, muscleBreakdown, todayISO,
+  activeRoutineForDay, addDaysISO, computeStreak, dayCompletion, dayOf, formatDuration, formatPercent,
+  monthRange, muscleBreakdown, orderedWorkoutDays, todayISO, trainingSecondsOf,
 } from "../format";
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -17,6 +19,10 @@ export function Stats() {
   const [days, setDays] = useState<DayLog[] | null>(null);
   const [streak, setStreak] = useState(0);
   const [prevAvg, setPrevAvg] = useState<number | null>(null);
+  // A rolling recent window (not the picked month) that feeds the per-workout-day
+  // training-time trend, and which workout day that trend is currently showing.
+  const [recentDays, setRecentDays] = useState<DayLog[]>([]);
+  const [timeDay, setTimeDay] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -28,18 +34,19 @@ export function Stats() {
     Promise.all([
       api.listExercises(),
       api.listDays(from, to),
-      api.listDays(addDaysISO(todayISO(), -90), todayISO()),
+      api.listDays(addDaysISO(todayISO(), -180), todayISO()),
       api.listDays(prev.from, prev.to),
       api.listSchedule(),
       api.listVersions(),
     ])
-      .then(([exs, ds, streakDays, prevDays, sch, vs]) => {
+      .then(([exs, ds, recent, prevDays, sch, vs]) => {
         setLive(exs);
         setDays(ds);
         setSchedule(sch);
         setVersions(vs);
+        setRecentDays(recent);
         const set = new Set<string>();
-        for (const d of streakDays) if (dayHasActivity(d)) set.add(d.date);
+        for (const d of recent) if (dayHasActivity(d)) set.add(d.date);
         setStreak(computeStreak(set, todayISO()));
         // Previous-month average, scoring each day against the routine that
         // applied on it, over every day of that (fully elapsed) month.
@@ -100,6 +107,61 @@ export function Stats() {
   const areaPath = points.length ? `${linePath} L${W},${bottom} L0,${bottom} Z` : "";
   const last = points.length ? toXY(points[points.length - 1], points.length - 1) : [0, bottom];
 
+  // --- Training-time trend, one series per workout day -----------------------
+  // Group the recent window's *timed* sessions by their workout day, in date
+  // order, so each rotation day (Push / Pull / Legs …) gets its own trend and
+  // sessions of different day types aren't mixed into one misleading line. A
+  // session counts only if it recorded active training time.
+  const timeGroups = useMemo(() => {
+    const map = new Map<string, { date: string; secs: number }[]>();
+    for (const d of [...recentDays].sort((a, b) => a.date.localeCompare(b.date))) {
+      const secs = trainingSecondsOf(d);
+      if (secs <= 0) continue;
+      const wd = dayOf(d); // normalises legacy "" → the single default day
+      const arr = map.get(wd) ?? [];
+      arr.push({ date: d.date, secs });
+      map.set(wd, arr);
+    }
+    return map;
+  }, [recentDays]);
+
+  // Workout days that have timed sessions, ordered by the live routine's day
+  // order first, then any retired labels still present in the history.
+  const timeDayList = useMemo(() => {
+    const ordered = orderedWorkoutDays(live).filter((wd) => timeGroups.has(wd));
+    for (const wd of timeGroups.keys()) if (!ordered.includes(wd)) ordered.push(wd);
+    return ordered;
+  }, [live, timeGroups]);
+
+  // Default to the most recently performed day — the one the user just did and
+  // is deciding whether to make harder — unless they pick another.
+  const latestTimeDay = useMemo(() => {
+    let best = "", bestDate = "";
+    for (const [wd, arr] of timeGroups) {
+      const lastDate = arr[arr.length - 1].date;
+      if (lastDate > bestDate) { bestDate = lastDate; best = wd; }
+    }
+    return best;
+  }, [timeGroups]);
+  const selTimeDay = timeDay && timeGroups.has(timeDay) ? timeDay : latestTimeDay;
+  const series = selTimeDay ? timeGroups.get(selTimeDay) ?? [] : [];
+
+  const avgSecs = series.length ? series.reduce((a, s) => a + s.secs, 0) / series.length : 0;
+  const lastSecs = series.length ? series[series.length - 1].secs : 0;
+  const prevSecs = series.length > 1 ? series[series.length - 2].secs : null;
+  const deltaSecs = prevSecs === null ? null : lastSecs - prevSecs;
+
+  const tPts = series.map((s) => s.secs);
+  const tMax = Math.max(1, ...tPts);
+  const tXY = (v: number, i: number) => {
+    const x = tPts.length <= 1 ? W / 2 : (i / (tPts.length - 1)) * W;
+    const y = bottom - (v / tMax) * (bottom - top);
+    return [x, y] as const;
+  };
+  const tLine = tPts.map((v, i) => { const [x, y] = tXY(v, i); return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
+  const tArea = tPts.length > 1 ? `${tLine} L${W},${bottom} L0,${bottom} Z` : "";
+  const tLast = tPts.length ? tXY(tPts[tPts.length - 1], tPts.length - 1) : [W / 2, bottom];
+
   return (
     <div>
       <div className="app-head">
@@ -143,6 +205,64 @@ export function Stats() {
                 <path d={linePath} fill="none" stroke="var(--ember)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
                 <circle cx={last[0]} cy={last[1]} r="4" fill="var(--ember)" />
               </svg>
+            )}
+          </div>
+
+          <div className="card" style={{ padding: 15, marginTop: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <span className="small" style={{ fontWeight: 750 }}>Training time</span>
+              <span className="tiny muted">last 6 months</span>
+            </div>
+            {timeDayList.length === 0 ? (
+              <p className="empty" style={{ padding: "24px 0" }}>No timed workouts yet. Use the workout timer to track your session time.</p>
+            ) : (
+              <>
+                {timeDayList.length > 1 && (
+                  <div className="slotchips" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                    {timeDayList.map((wd) => (
+                      <button key={wd} className={`chip${wd === selTimeDay ? " active" : ""}`} onClick={() => setTimeDay(wd)}>{wd}</button>
+                    ))}
+                  </div>
+                )}
+                {timeDayList.length === 1 && selTimeDay !== DEFAULT_WORKOUT_DAY && (
+                  <div className="tiny muted" style={{ marginBottom: 10 }}>{selTimeDay}</div>
+                )}
+
+                <div style={{ display: "flex", gap: 20, marginBottom: 10 }}>
+                  <div>
+                    <div className="tiny muted">Avg session</div>
+                    <div className="num" style={{ fontSize: 20, fontWeight: 750 }}>{formatDuration(avgSecs * 1000)}</div>
+                  </div>
+                  <div>
+                    <div className="tiny muted">Last session</div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                      <span className="num" style={{ fontSize: 20, fontWeight: 750 }}>{formatDuration(lastSecs * 1000)}</span>
+                      {deltaSecs !== null && deltaSecs !== 0 && (
+                        <span className="num tiny" style={{ color: "var(--ink-3)" }}>
+                          {deltaSecs > 0 ? "▲" : "▼"} {formatDuration(Math.abs(deltaSecs) * 1000)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <svg className="chart-svg" viewBox="0 0 300 116" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="timeArea" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stopColor="var(--ember)" stopOpacity="0.32" />
+                      <stop offset="1" stopColor="var(--ember)" stopOpacity="0" />
+                    </linearGradient>
+                  </defs>
+                  <line x1="0" y1={top} x2="300" y2={top} stroke="var(--line)" strokeWidth="1" />
+                  <line x1="0" y1={(top + bottom) / 2} x2="300" y2={(top + bottom) / 2} stroke="var(--line)" strokeWidth="1" />
+                  {tArea && <path d={tArea} fill="url(#timeArea)" />}
+                  <path d={tLine} fill="none" stroke="var(--ember)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                  <circle cx={tLast[0]} cy={tLast[1]} r="4" fill="var(--ember)" />
+                </svg>
+                <div className="tiny muted" style={{ textAlign: "right", marginTop: 2 }}>
+                  peak {formatDuration(tMax * 1000)} · {series.length} session{series.length === 1 ? "" : "s"}
+                </div>
+              </>
             )}
           </div>
 

@@ -73,6 +73,16 @@ export function formatDuration(ms: number): string {
   return `${m}:${ss}`;
 }
 
+// trainingSecondsOf sums a day's active training time across every source that
+// recorded it (the phone "app" bucket and the "watch" bucket). Mirrors the
+// backend DayLog.TrainingSeconds(); rest time is excluded. Days logged before
+// time tracking existed (no timeBySource) return 0.
+export function trainingSecondsOf(day: DayLog): number {
+  let total = 0;
+  for (const t of Object.values(day.timeBySource ?? {})) total += t.trainingSeconds ?? 0;
+  return total;
+}
+
 // unitLabel is the short suffix shown next to an amount.
 export function unitLabel(unit: Unit): string {
   switch (unit) {

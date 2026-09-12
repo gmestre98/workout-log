@@ -16,6 +16,7 @@ import {
   muscleBreakdown,
   dayHeader,
   formatDuration,
+  trainingSecondsOf,
   effectiveVersionId,
   firstOfMonth,
   monthLabel,
@@ -153,6 +154,24 @@ describe("formatDuration", () => {
     expect(formatDuration(3_600_000)).toBe("1:00:00");
     expect(formatDuration(3_661_000)).toBe("1:01:01");
     expect(formatDuration(-5000)).toBe("0:00");
+  });
+});
+
+describe("trainingSecondsOf", () => {
+  const day = (timeBySource?: Record<string, { trainingSeconds: number; restSeconds: number }>) =>
+    ({ date: "2026-09-01", exercises: {}, ...(timeBySource ? { timeBySource } : {}) });
+  it("returns 0 when the day has no time tracked", () => {
+    expect(trainingSecondsOf(day())).toBe(0);
+  });
+  it("sums active training across sources, ignoring rest", () => {
+    expect(
+      trainingSecondsOf(
+        day({
+          app: { trainingSeconds: 600, restSeconds: 300 },
+          watch: { trainingSeconds: 900, restSeconds: 1000 },
+        })
+      )
+    ).toBe(1500);
   });
 });
 
