@@ -76,6 +76,13 @@ export const api = {
   exportSheets: () => request<{ url: string; title: string }>("POST", "/api/export/sheets"),
   disconnectSheets: () => request<void>("DELETE", "/auth/sheets"),
 
+  // Travel mode: the shared trip switch (global on/off + per-exercise opt-outs).
+  // Stored server-side so the phone and the watch agree on it, rather than each
+  // device keeping its own flag.
+  getTravel: () => request<{ on: boolean; off: string[] }>("GET", "/api/travel"),
+  setTravel: (on: boolean, off: string[]) =>
+    request<{ on: boolean; off: string[] }>("PUT", "/api/travel", { on, off }),
+
   listSchedule: () => request<VersionAssignment[]>("GET", "/api/routine/schedule"),
   setAssignment: (startDate: string, versionId: string) =>
     request<VersionAssignment>("PUT", `/api/routine/schedule/${startDate}`, { versionId }),

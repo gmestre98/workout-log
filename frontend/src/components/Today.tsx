@@ -40,13 +40,15 @@ export function Today({ email }: { email: string }) {
   // Manual override of the viewed date's workout day (the day switcher). Cleared
   // whenever the viewed date changes so each date starts from its own default.
   const [override, setOverride] = useState<string | null>(null);
-  // Travel mode: a global switch (persisted on the device) that swaps every
-  // exercise with a travel replacement for its variant. Already-logged days
-  // instead honour the travel flag stamped on them, so history is authoritative.
+  // Travel mode: a global switch that swaps every exercise with a travel
+  // replacement for its variant. It is shared with the watch (persisted
+  // server-side) and hydrated on mount; the local cache just seeds this initial
+  // value. Already-logged days instead honour the travel flag stamped on them,
+  // so history is authoritative.
   const [travelMode, setTravel] = useState(getTravelMode);
-  // Device-local default set of exercises kept on their normal version while
-  // travelling (see travel.ts). Drives unlogged days; a logged day instead uses
-  // the set it was stamped with (day.travelOff).
+  // Default set of exercises kept on their normal version while travelling (see
+  // travel.ts), also shared with the watch. Drives unlogged days; a logged day
+  // instead uses the set it was stamped with (day.travelOff).
   const [travelOffState, setTravelOffState] = useState(getTravelOff);
   const [schedule, setSchedule] = useState<VersionAssignment[]>([]);
   const [versions, setVersions] = useState<RoutineVersion[]>([]);
@@ -88,6 +90,25 @@ export function Today({ email }: { email: string }) {
     Promise.all([api.listSchedule(), api.listVersions()])
       .then(([sch, vs]) => { setSchedule(sch); setVersions(vs); })
       .catch(() => {});
+  }, []);
+
+  // Travel mode is a shared trip setting: the watch reads the same server value,
+  // so hydrate from the server on load (and mirror it into the device cache,
+  // which seeds the initial render and keeps working offline). A failed fetch
+  // just leaves the cached state in place.
+  useEffect(() => {
+    let cancelled = false;
+    api.getTravel()
+      .then(({ on, off }) => {
+        if (cancelled) return;
+        const offSet = new Set(off);
+        setTravel(on);
+        setTravelMode(on);
+        setTravelOffState(offSet);
+        setTravelOff(offSet);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, []);
 
   // Routine + selected day.
@@ -285,6 +306,8 @@ export function Today({ email }: { email: string }) {
     (on: boolean) => {
       setTravelMode(on);
       setTravel(on);
+      // Sync the shared setting so the watch (and other devices) pick it up.
+      api.setTravel(on, [...getTravelOff()]).catch(() => {});
       setDay((prev) => {
         if (!prev || !dayHasActivity(prev) || !!prev.travel === on) return prev;
         const next: DayLog = { ...prev, date, travel: on };
@@ -306,6 +329,8 @@ export function Today({ email }: { email: string }) {
       else next.add(id);
       setTravelOffState(next);
       setTravelOff(next);
+      // Sync the opt-out set so the watch honours the same kept-normal exercises.
+      api.setTravel(getTravelMode(), [...next]).catch(() => {});
       setDay((prev) => {
         if (!prev || !dayHasActivity(prev)) return prev;
         const arr = [...next];

@@ -21,6 +21,8 @@ vi.mock("./api", async () => {
       setVersionStatus: vi.fn().mockResolvedValue({}),
       activateVersion: vi.fn().mockResolvedValue({}),
       loadVersion: vi.fn().mockResolvedValue([]),
+      getTravel: vi.fn().mockResolvedValue({ on: false, off: [] }),
+      setTravel: vi.fn().mockResolvedValue({ on: false, off: [] }),
       listSchedule: vi.fn().mockResolvedValue([]),
       setAssignment: vi.fn().mockResolvedValue({}),
       deleteAssignment: vi.fn().mockResolvedValue(undefined),

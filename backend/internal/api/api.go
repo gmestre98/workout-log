@@ -64,7 +64,66 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/routine/schedule/{date}", h.setAssignment)
 	mux.HandleFunc("DELETE /api/routine/schedule/{date}", h.deleteAssignment)
 	mux.HandleFunc("POST /api/export/sheets", h.exportSheets)
+	mux.HandleFunc("GET /api/travel", h.getTravel)
+	mux.HandleFunc("PUT /api/travel", h.setTravel)
 	return mux
+}
+
+// travelSettingKey is the Store key holding the shared travel-mode setting.
+const travelSettingKey = "travel_mode"
+
+// TravelState is the shared travel-mode setting: the global on/off switch for a
+// trip and the ids of exercises kept on their normal version while it is on.
+// Unlike the theme it is stored server-side, so every device — the phone app and
+// the watch — reads and writes the same trip state instead of each keeping its
+// own device-local flag.
+type TravelState struct {
+	On  bool     `json:"on"`
+	Off []string `json:"off"`
+}
+
+// loadTravel reads the stored travel setting, returning the zero state (off, no
+// opt-outs) when it was never set or cannot be parsed.
+func (h *Handler) loadTravel(ctx context.Context) TravelState {
+	st := TravelState{Off: []string{}}
+	raw, err := h.store.GetSetting(ctx, travelSettingKey)
+	if err != nil || raw == "" {
+		return st
+	}
+	var parsed TravelState
+	if json.Unmarshal([]byte(raw), &parsed) != nil {
+		return st
+	}
+	st.On = parsed.On
+	if parsed.Off != nil {
+		st.Off = parsed.Off
+	}
+	return st
+}
+
+func (h *Handler) getTravel(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.loadTravel(r.Context()))
+}
+
+func (h *Handler) setTravel(w http.ResponseWriter, r *http.Request) {
+	var st TravelState
+	if err := json.NewDecoder(r.Body).Decode(&st); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if st.Off == nil {
+		st.Off = []string{}
+	}
+	buf, err := json.Marshal(st)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := h.store.SetSetting(r.Context(), travelSettingKey, string(buf)); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
 }
 
 // exportSheets gathers all data and writes it into a new formatted Google Sheet

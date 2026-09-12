@@ -1,9 +1,11 @@
 // Travel mode is a global switch the user flips on for a trip: while it's on,
 // the Today screen swaps every exercise that has a travel replacement for its
-// variant. The choice is stored on the device (like the theme) so it stays on
-// across days and reloads until the trip ends and the user turns it off. Each
-// day that gets logged is separately stamped (DayLog.travel) so history records
-// which days were done in travel mode.
+// variant. The switch is shared across devices — it is persisted server-side
+// (GET/PUT /api/travel) so the watch reads the same trip state — and these
+// localStorage helpers are the device-local cache: they seed the initial render
+// and keep the last known value while offline until the server load returns.
+// Each day that gets logged is separately stamped (DayLog.travel) so history
+// records which days were done in travel mode.
 const KEY = "wl.travel";
 
 export function getTravelMode(): boolean {

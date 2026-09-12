@@ -31,6 +31,29 @@ module Api {
         Communications.makeWebRequest(Config.base() + "/api/days/" + date, null, options, cb);
     }
 
+    // getTravel fetches the shared travel-mode setting: {on: bool, off: [ids]}.
+    function getTravel(cb) {
+        var options = {
+            :method => Communications.HTTP_REQUEST_METHOD_GET,
+            :headers => authHeaders(),
+            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
+        };
+        Communications.makeWebRequest(Config.base() + "/api/travel", null, options, cb);
+    }
+
+    // putTravel saves the shared travel-mode setting (body: {on, off}).
+    function putTravel(body, cb) {
+        var options = {
+            :method => Communications.HTTP_REQUEST_METHOD_PUT,
+            :headers => {
+                "Content-Type" => Communications.REQUEST_CONTENT_TYPE_JSON,
+                "Authorization" => "Bearer " + Config.token()
+            },
+            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
+        };
+        Communications.makeWebRequest(Config.base() + "/api/travel", body, options, cb);
+    }
+
     // putDay saves the whole DayLog for date.
     function putDay(date, body, cb) {
         var options = {

@@ -9,11 +9,13 @@ class MainView extends WatchUi.View {
 
     hidden var mStatus;   // :setup, :loading, :error, :empty
     hidden var mFetched;  // guard so we fetch only once per show
+    hidden var mActive;   // active exercises, held while the travel setting loads
 
     function initialize() {
         View.initialize();
         mStatus = :loading;
         mFetched = false;
+        mActive = null;
     }
 
     function onShow() {
@@ -40,9 +42,9 @@ class MainView extends WatchUi.View {
         Api.getExercises(method(:onExercises));
     }
 
-    // onExercises receives the exercise list; on success it shows the day picker
-    // (replacing this view so BACK from the picker exits the app). Choosing a day
-    // then opens that day's exercise list.
+    // onExercises receives the exercise list; on success it fetches the shared
+    // travel setting, then shows the picker (see onTravel). Choosing a day then
+    // opens that day's exercise list.
     function onExercises(responseCode, data) {
         if (responseCode != 200 || !(data instanceof Toybox.Lang.Array)) {
             mStatus = :error;
@@ -61,6 +63,28 @@ class MainView extends WatchUi.View {
             WatchUi.requestUpdate();
             return;
         }
+        mActive = active;
+        // Load the shared travel switch so the picker (and the workout) reflect
+        // whatever the phone set; showPicker runs regardless of success.
+        Api.getTravel(method(:onTravel));
+    }
+
+    // onTravel records the shared travel setting (or marks it unavailable) and
+    // then shows the picker. A failed fetch is not fatal: the workout just runs
+    // without travel substitution and preserves each day's own stamp on save.
+    function onTravel(responseCode, data) {
+        if (responseCode == 200 && data != null) {
+            Travel.set(data["on"] == true, data["off"]);
+        } else {
+            Travel.clear();
+        }
+        showPicker();
+    }
+
+    // showPicker replaces this view with the day picker, or with the single
+    // day's exercise list directly, so BACK from the picker exits the app.
+    hidden function showPicker() {
+        var active = mActive;
         var days = WorkoutDays.distinct(active);
         if (days.size() <= 1) {
             // Single-day routine: skip the picker, go straight to the exercises.

@@ -63,6 +63,41 @@ func TestCreateAndListExercise(t *testing.T) {
 	}
 }
 
+func TestTravelSettingDefaultsOff(t *testing.T) {
+	srv, _ := newServer()
+	defer srv.Close()
+
+	resp := do(t, http.MethodGet, srv.URL+"/api/travel", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get travel: got %d", resp.StatusCode)
+	}
+	var st TravelState
+	json.NewDecoder(resp.Body).Decode(&st)
+	if st.On || st.Off == nil || len(st.Off) != 0 {
+		t.Fatalf("expected off/empty default, got %+v", st)
+	}
+}
+
+func TestTravelSettingRoundTrip(t *testing.T) {
+	srv, _ := newServer()
+	defer srv.Close()
+
+	resp := do(t, http.MethodPut, srv.URL+"/api/travel", TravelState{On: true, Off: []string{"a", "b"}})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("put travel: got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = do(t, http.MethodGet, srv.URL+"/api/travel", nil)
+	defer resp.Body.Close()
+	var st TravelState
+	json.NewDecoder(resp.Body).Decode(&st)
+	if !st.On || len(st.Off) != 2 || st.Off[0] != "a" || st.Off[1] != "b" {
+		t.Fatalf("unexpected persisted state %+v", st)
+	}
+}
+
 func TestCreateExerciseValidation(t *testing.T) {
 	srv, _ := newServer()
 	defer srv.Close()

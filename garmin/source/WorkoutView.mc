@@ -227,6 +227,17 @@ class WorkoutView extends WatchUi.View {
             "exercises" => exercises,
             "timeBySource" => timeBySource
         };
+        // Stamp the day with the travel state it was performed under (a
+        // history/export label; the logs above already snapshotted the travel
+        // numbers). When the shared setting couldn't be read, preserve whatever
+        // the day already carried rather than forcing it off.
+        if (Travel.loaded) {
+            body["travel"] = Travel.on;
+            if (Travel.off.size() > 0) { body["travelOff"] = Travel.off; }
+        } else if (data != null) {
+            if (data["travel"] != null) { body["travel"] = data["travel"]; }
+            if (data["travelOff"] != null) { body["travelOff"] = data["travelOff"]; }
+        }
         Api.putDay(Config.today(), body, method(:onDaySaved));
     }
 

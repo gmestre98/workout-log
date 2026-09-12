@@ -52,10 +52,18 @@ module WorkoutDays {
     }
 
     // exerciseMenu builds the exercise picker for one day (title = day label).
+    // When any exercise has a travel version, a travel-mode toggle is offered as
+    // the first item; each exercise is shown as its travel variant while the
+    // switch is on. Item ids stay the index into `exercises` (the toggle uses the
+    // :travel symbol), so selection still maps back to the right exercise.
     function exerciseMenu(exercises, day) {
         var m = new WatchUi.Menu2({:title => day});
+        if (Travel.anyVariant(exercises)) {
+            m.addItem(new WatchUi.ToggleMenuItem(
+                WatchUi.loadResource(Rez.Strings.TravelMode), null, :travel, Travel.on, {}));
+        }
         for (var i = 0; i < exercises.size(); i++) {
-            var ex = exercises[i];
+            var ex = Travel.apply(exercises[i]);
             m.addItem(new WatchUi.MenuItem(ex["name"], Fmt.planned(ex), i, {}));
         }
         return m;

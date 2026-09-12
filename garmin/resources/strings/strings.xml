@@ -21,5 +21,6 @@
     <string id="Set">Set</string>
     <string id="Done">Done</string>
     <string id="StartHint">START to begin</string>
+    <string id="TravelMode">Travel mode</string>
     <string id="LoadFailed">Couldn't reach server</string>
 </strings>
