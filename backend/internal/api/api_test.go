@@ -165,6 +165,36 @@ func TestSaveDayTravelFlag(t *testing.T) {
 	}
 }
 
+func TestSaveDayStatus(t *testing.T) {
+	srv, _ := newServer()
+	defer srv.Close()
+	// A cross-training day: no routine exercises, a status and its types.
+	day := domain.DayLog{Status: domain.DayCross, StatusTags: []string{"Climbing"}, StatusNote: "2h bouldering"}
+	resp := do(t, http.MethodPut, srv.URL+"/api/days/2026-07-20", day)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("save day: got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = do(t, http.MethodGet, srv.URL+"/api/days/2026-07-20", nil)
+	var got domain.DayLog
+	json.NewDecoder(resp.Body).Decode(&got)
+	resp.Body.Close()
+	if got.Status != domain.DayCross || len(got.StatusTags) != 1 || got.StatusTags[0] != "Climbing" || got.StatusNote != "2h bouldering" {
+		t.Fatalf("status not persisted: %+v", got)
+	}
+}
+
+func TestSaveDayInvalidStatus(t *testing.T) {
+	srv, _ := newServer()
+	defer srv.Close()
+	resp := do(t, http.MethodPut, srv.URL+"/api/days/2026-07-20", domain.DayLog{Status: "bogus"})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("got %d want 400", resp.StatusCode)
+	}
+}
+
 func TestGetMissingExercise404(t *testing.T) {
 	srv, _ := newServer()
 	defer srv.Close()

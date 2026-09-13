@@ -150,6 +150,19 @@ input, select { font-family: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { .ring .prog { transition: none; } }
 
 .streakpill { display: inline-flex; align-items: center; gap: 6px; background: color-mix(in srgb, var(--ember) 14%, transparent); color: var(--ember); font-weight: 700; font-size: 13px; padding: 6px 12px; border-radius: 999px; }
+/* The "moving" streak (routine or another sport) reads in the completed/green
+   accent so it is visibly distinct from the ember routine streak. */
+.streakpill.move { background: color-mix(in srgb, var(--done) 15%, transparent); color: var(--done); }
+
+/* Status card: a day the routine wasn't done (cross-training or a skip). */
+.status-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 13px 14px; box-shadow: var(--shadow-sm); }
+.status-card .status-ic { font-size: 22px; line-height: 1; flex: none; }
+.status-card .status-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.status-card .status-verb { font-weight: 730; font-size: 15px; }
+.status-card .ex-meta { overflow: hidden; text-overflow: ellipsis; }
+/* Prompt shown on an unlogged day to record what happened instead. */
+.status-prompt { width: 100%; text-align: center; background: var(--inset); border: 1px dashed var(--line); border-radius: 14px; padding: 13px; color: var(--ink-2); font-size: 13.5px; font-weight: 600; }
+.status-prompt b { color: var(--ember); font-weight: 750; }
 .kv { display: flex; flex-direction: column; }
 .kv .n { font-size: 20px; font-weight: 700; }
 .kv .l { font-size: 10.5px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .05em; margin-top: 1px; }

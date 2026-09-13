@@ -112,6 +112,29 @@ type ExerciseLog struct {
 	Sets          []SetEntry `json:"sets" firestore:"sets"`
 }
 
+// DayStatus marks a day on which the routine was not performed. It is empty for
+// a normal day (routine trained, or nothing recorded yet).
+type DayStatus string
+
+const (
+	// DayCross is a day the user trained a different sport instead of the routine.
+	// It counts toward the "moved" streak but not the routine streak.
+	DayCross DayStatus = "cross"
+	// DaySkipped is a missed day the user recorded a reason for. It breaks both
+	// the routine and the moved streak.
+	DaySkipped DayStatus = "skipped"
+)
+
+// Valid reports whether s is a known status (empty is valid: a normal day).
+func (s DayStatus) Valid() bool {
+	switch s {
+	case "", DayCross, DaySkipped:
+		return true
+	default:
+		return false
+	}
+}
+
 // DayLog is every exercise logged on a single calendar day, keyed by exercise
 // ID. Stored as one document per day.
 type DayLog struct {
@@ -133,6 +156,14 @@ type DayLog struct {
 	// replacement used it.
 	TravelOff []string               `json:"travelOff,omitempty" firestore:"travelOff,omitempty"`
 	Exercises map[string]ExerciseLog `json:"exercises" firestore:"exercises"`
+	// Status marks a day the routine was not performed: DayCross (trained another
+	// sport instead) or DaySkipped (a missed day, reason recorded). Empty is a
+	// normal day. StatusTags are the chosen types — sports for a cross day, reasons
+	// for a skipped one — and StatusNote is an optional free note. These are
+	// independent of Exercises: a day can be both cross and hold logged work.
+	Status     DayStatus `json:"status,omitempty" firestore:"status,omitempty"`
+	StatusTags []string  `json:"statusTags,omitempty" firestore:"statusTags,omitempty"`
+	StatusNote string    `json:"statusNote,omitempty" firestore:"statusNote,omitempty"`
 	// TimeBySource is the workout time spent on this day, split by the device that
 	// recorded it ("app", "watch"). Each source owns and overwrites only its own
 	// bucket, so devices don't clobber each other; the day's total time is the sum

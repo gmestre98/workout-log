@@ -332,6 +332,10 @@ func (h *Handler) saveDay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.Date = date // path is the source of truth
+	if !d.Status.Valid() {
+		writeErr(w, http.StatusBadRequest, "status must be cross or skipped")
+		return
+	}
 	if d.Exercises == nil {
 		d.Exercises = map[string]domain.ExerciseLog{}
 	}

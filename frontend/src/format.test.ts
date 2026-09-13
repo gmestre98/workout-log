@@ -28,6 +28,8 @@ import {
   orderedParts,
   nextWorkoutDay,
   applyTravel,
+  dayHasActivity,
+  dayMoved,
 } from "./format";
 import type { DayLog, Exercise } from "./types";
 
@@ -39,6 +41,23 @@ const ex = (id: string, over: Partial<Exercise> = {}): Exercise => ({
 const fullLog = { exerciseId: "x", plannedSets: 1, plannedAmount: 10, unit: "reps" as const, sets: [{ completed: true, actualAmount: 10 }] };
 const day = (date: string, ids: string[]): DayLog => ({
   date, exercises: Object.fromEntries(ids.map((id) => [id, { ...fullLog, exerciseId: id }])),
+});
+
+describe("dayHasActivity / dayMoved", () => {
+  const empty = (over: Partial<DayLog> = {}): DayLog => ({ date: "2026-07-20", exercises: {}, ...over });
+
+  it("dayHasActivity is true only when a set is completed", () => {
+    expect(dayHasActivity(day("2026-07-20", ["a"]))).toBe(true);
+    expect(dayHasActivity(empty())).toBe(false);
+    expect(dayHasActivity(empty({ status: "cross", statusTags: ["Climbing"] }))).toBe(false);
+  });
+
+  it("dayMoved counts routine activity OR a cross day, but not a skip", () => {
+    expect(dayMoved(day("2026-07-20", ["a"]))).toBe(true); // routine work
+    expect(dayMoved(empty({ status: "cross", statusTags: ["Running"] }))).toBe(true);
+    expect(dayMoved(empty({ status: "skipped", statusTags: ["Tired"] }))).toBe(false);
+    expect(dayMoved(empty())).toBe(false);
+  });
 });
 
 describe("exerciseCompletion", () => {

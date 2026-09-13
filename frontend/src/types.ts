@@ -72,6 +72,14 @@ export interface DayLog {
   // on (the user had the equipment for those). Absent means all travel.
   travelOff?: string[];
   exercises: Record<string, ExerciseLog>;
+  // Status of a day the routine was not performed: "cross" (trained a different
+  // sport instead) or "skipped" (a missed day, reason recorded). Absent is a
+  // normal day. statusTags are the chosen types — sports for a cross day,
+  // reasons for a skipped one — and statusNote is an optional free note. These
+  // are independent of exercises: a day can be both cross and hold logged work.
+  status?: DayStatus;
+  statusTags?: string[];
+  statusNote?: string;
   // Workout time spent on this day, split by the device that recorded it
   // ("app", "watch"). Each source owns its own bucket so devices don't clobber
   // each other; the day's total time is the sum across sources. Absent for days
@@ -98,6 +106,9 @@ export interface Summary {
   daysAbove50: number;
   perDay: DayStat[];
 }
+
+// DayStatus records how a non-routine day went — see DayLog.status.
+export type DayStatus = "cross" | "skipped";
 
 export type VersionStatus = "current" | "future" | "past";
 
@@ -132,6 +143,22 @@ export const MUSCLE_GROUPS = [
   "Biceps", "Triceps", "Forearms", "Core", "Abs", "Obliques", "Lower back",
   "Glutes", "Quads", "Hamstrings", "Adductors", "Abductors", "Calves",
   "Neck", "Full body", "Cardio",
+];
+
+// Suggested activity types for a "trained something else" (cross) day, shown as
+// chips. You can tap several or type your own; anything used before resurfaces
+// automatically (same pattern as EQUIPMENT_OPTIONS).
+export const CROSS_ACTIVITIES = [
+  "Running", "Climbing", "Swimming", "Cycling", "Football", "Hiking",
+  "Yoga", "Surfing", "Tennis", "Basketball", "Walk", "Mobility",
+];
+
+// Suggested reasons for a skipped/missed day, shown as chips (free-add, and
+// previously-used reasons resurface). "Rest day" belongs here as a deliberate
+// off day — it is still a day the routine wasn't done.
+export const SKIP_REASONS = [
+  "Rest day", "No time", "Tired", "Sick", "Injured", "Travel",
+  "Sore", "Weather", "Low motivation", "Work",
 ];
 
 // Equipment options offered as chips — only the ones actually in use for now.

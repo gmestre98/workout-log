@@ -171,6 +171,19 @@ export function addDaysISO(iso: string, delta: number): string {
   return todayISO(new Date(y, m - 1, d + delta));
 }
 
+// dayHasActivity reports whether any set was completed on the day — the test for
+// a routine day (one that counts toward the routine streak and active-days).
+export function dayHasActivity(d: DayLog): boolean {
+  return Object.values(d.exercises).some((l) => l.sets.some((s) => s.completed));
+}
+
+// dayMoved reports whether the day counts as physical activity for the "moved"
+// streak: either the routine had logged work, or it was a cross-training day
+// (trained a different sport). A skipped day counts as neither.
+export function dayMoved(d: DayLog): boolean {
+  return d.status === "cross" || dayHasActivity(d);
+}
+
 // computeStreak counts consecutive active days ending today (or yesterday, as a
 // grace day if today isn't logged yet). activeDates holds YYYY-MM-DD strings
 // with any completion.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { DayLog, Exercise, RoutineVersion, VersionAssignment } from "../types";
-import { dayCompletion, dayHeader, formatPercent, heatLevel, monthRange, routineForDate, todayISO } from "../format";
+import { dayCompletion, dayHeader, dayMoved, formatPercent, heatLevel, monthRange, routineForDate, todayISO } from "../format";
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -50,6 +50,8 @@ export function History() {
   }, [leadBlanks, lastDay, month, routineFor, byDate]);
 
   const activeDays = (days ?? []).filter((d) => dayCompletion(routineFor(d.date), d) > 0).length;
+  // Days the user moved at all — routine work or a logged cross-training day.
+  const movedDays = (days ?? []).filter((d) => dayMoved(d)).length;
   const recent = useMemo(
     () => [...(days ?? [])].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8),
     [days]
@@ -84,7 +86,10 @@ export function History() {
             </div>
             <div className="legend-row">
               <span className="sc">Less <i style={{ background: "var(--surface-2)" }} /><i style={{ background: "color-mix(in srgb,var(--ember) 45%,transparent)" }} /><i style={{ background: "var(--ember)" }} /> More</span>
-              <span style={{ fontWeight: 700, color: "var(--ink)" }}><span className="num">{activeDays}</span> active days</span>
+              <span style={{ fontWeight: 700, color: "var(--ink)" }}>
+                <span className="num">{activeDays}</span> active
+                {movedDays > activeDays && <> · <span className="num">{movedDays}</span> moved</>} days
+              </span>
             </div>
           </div>
 
@@ -96,17 +101,29 @@ export function History() {
               {recent.map((d) => {
                 const comp = dayCompletion(routineFor(d.date), d);
                 const h = dayHeader(d.date);
-                const label = comp >= 1 ? "Full day" : comp > 0 ? "Partial day" : "Rest day";
-                const barCls = comp >= 1 ? "bar g" : comp > 0 ? "bar" : "bar zero";
+                const tags = (d.statusTags ?? []).join(", ");
+                // A status day (routine not done) reads by its status; otherwise
+                // it reads by routine completion as before.
+                const label = d.status === "cross"
+                  ? `🏃 ${tags || "Trained something else"}`
+                  : d.status === "skipped"
+                    ? `⏸ ${tags || "Skipped"}`
+                    : comp >= 1 ? "Full day" : comp > 0 ? "Partial day" : "Rest day";
+                const right = comp > 0
+                  ? formatPercent(comp)
+                  : d.status === "cross" ? "moved" : d.status === "skipped" ? "skipped" : "—";
+                const rightCls = comp >= 1 ? "g" : comp > 0 ? "a" : d.status === "cross" ? "g" : "z";
+                const barCls = comp >= 1 ? "bar g" : comp > 0 ? "bar" : d.status === "cross" ? "bar g" : "bar zero";
+                const barW = comp > 0 ? Math.max(comp * 100, 6) : d.status === "cross" ? 100 : 3;
                 return (
                   <div key={d.date} className="daylist-row">
                     <div className="dnum"><div className="d num">{Number(d.date.slice(8))}</div><div className="m">{h.dow}</div></div>
                     <div className="dbar">
                       <div className="top">
                         <span style={{ fontWeight: 700 }}>{label}</span>
-                        <span className={`num ${comp >= 1 ? "g" : comp > 0 ? "a" : "z"}`} style={{ fontWeight: 700 }}>{comp > 0 ? formatPercent(comp) : "—"}</span>
+                        <span className={`num ${rightCls}`} style={{ fontWeight: 700, fontSize: comp > 0 ? undefined : 11 }}>{right}</span>
                       </div>
-                      <div className={barCls}><span style={{ width: `${Math.max(comp * 100, comp > 0 ? 6 : 3)}%` }} /></div>
+                      <div className={barCls}><span style={{ width: `${barW}%` }} /></div>
                     </div>
                   </div>
                 );
