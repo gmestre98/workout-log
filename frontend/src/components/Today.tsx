@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { getDay, saveDay, subscribeSync, getSyncState, type SyncState } from "../dayStore";
 import type { DayLog, DayStatus, Exercise, ExerciseLog, RoutineVersion, VersionAssignment } from "../types";
-import { STRETCH_DAY } from "../types";
 import {
   addDaysISO, applyTravel, computeStreak, dayCompletion, dayHasActivity, dayHeader, dayMoved, dayOf,
-  effectiveVersionId, exerciseCompletion, formatPercent, isStretchDay, newLog, nextWorkoutDay,
-  orderedWorkoutDays, routineForDate, setMeta, slotColor, todayISO,
+  effectiveVersionId, exerciseCompletion, formatPercent, newLog, nextWorkoutDay,
+  orderedWorkoutDays, routineForDate, setMeta, slotColor, stretchDayLabels, todayISO,
 } from "../format";
 import { getTravelMode, setTravelMode, getTravelOff, setTravelOff } from "../travel";
 import { clockTotals, workoutClock } from "../timer";
@@ -158,12 +157,24 @@ export function Today({ email }: { email: string }) {
     [date, schedule, versions, liveExercises]
   );
   const orderedDays = useMemo(() => orderedWorkoutDays(routineExercises), [routineExercises]);
-  // The rotation cycle excludes the Stretch day, so auto-advance goes Day 1 → 2
-  // → 3 → 1 and never lands on Stretch; a sport day doesn't consume the rotation.
-  const rotationDays = useMemo(() => orderedDays.filter((d) => !isStretchDay(d)), [orderedDays]);
-  // The actual Stretch-day label in this routine (if the user has set one up), so
-  // a sport day can switch to it. Undefined when no Stretch day exists yet.
-  const stretchLabel = useMemo(() => orderedDays.find((d) => isStretchDay(d)), [orderedDays]);
+  // The workout days marked as stretch days (any exercise flagged). They sit
+  // outside the rotation cycle and are what a sport day switches to.
+  const stretchLabels = useMemo(() => stretchDayLabels(routineExercises), [routineExercises]);
+  // The rotation cycle excludes stretch days, so auto-advance goes Day 1 → 2 → 3
+  // → 1 and never lands on a stretch day; a sport day doesn't consume the rotation.
+  const rotationDays = useMemo(() => orderedDays.filter((d) => !stretchLabels.has(d)), [orderedDays, stretchLabels]);
+  const stretchDayList = useMemo(() => orderedDays.filter((d) => stretchLabels.has(d)), [orderedDays, stretchLabels]);
+  // Which stretch day a sport day switches to: the one most recently performed
+  // (so it defaults to the stretch routine you usually pair with sport), else the
+  // first. Undefined when no stretch day is set up. With several, you can still
+  // switch to another via the day dropdown.
+  const defaultStretchDay = useMemo(() => {
+    let lastDate = "", last = "";
+    for (const [dt, wd] of workoutDayByDate) {
+      if (wd && stretchLabels.has(wd) && dt > lastDate) { lastDate = dt; last = wd; }
+    }
+    return last || stretchDayList[0];
+  }, [workoutDayByDate, stretchLabels, stretchDayList]);
 
   // A legacy day (logged before rotation existed: has activity, no workoutDay)
   // keeps showing the whole routine as before. Every other date is a single
@@ -384,9 +395,10 @@ export function Today({ email }: { email: string }) {
       // the selected day to Stretch (if one is set up). Clearing a sport day
       // returns to the rotation default. The override mirrors day.workoutDay so
       // the switcher and the rendered exercises stay in sync.
+      const isStretch = (wd?: string | null) => !!wd && stretchLabels.has(wd);
       setOverride((ov) => {
-        if (status === "cross" && stretchLabel) return stretchLabel;
-        if (!status && isStretchDay(ov)) return rotationDefault ?? null;
+        if (status === "cross" && defaultStretchDay) return defaultStretchDay;
+        if (!status && isStretch(ov)) return rotationDefault ?? null;
         return ov;
       });
       setDay((prev) => {
@@ -396,12 +408,12 @@ export function Today({ email }: { email: string }) {
           next.status = status;
           next.statusTags = tags;
           next.statusNote = note || undefined;
-          if (status === "cross" && stretchLabel) next.workoutDay = stretchLabel;
+          if (status === "cross" && defaultStretchDay) next.workoutDay = defaultStretchDay;
         } else {
           delete next.status;
           delete next.statusTags;
           delete next.statusNote;
-          if (isStretchDay(base.workoutDay)) next.workoutDay = rotationDefault;
+          if (isStretch(base.workoutDay)) next.workoutDay = rotationDefault;
         }
         scheduleSave(next);
         return next;
@@ -411,7 +423,7 @@ export function Today({ email }: { email: string }) {
       if (status === "cross" && tags.length) setKnownCross((k) => [...new Set([...k, ...tags])]);
       if (status === "skipped" && tags.length) setKnownSkip((k) => [...new Set([...k, ...tags])]);
     },
-    [date, scheduleSave, stretchLabel, rotationDefault]
+    [date, scheduleSave, defaultStretchDay, rotationDefault, stretchLabels]
   );
 
   // logSet marks the next incomplete set of ex as done with the given amount
@@ -571,9 +583,9 @@ export function Today({ email }: { email: string }) {
             </span>
             <span className="link" style={{ flex: "none" }}>Edit</span>
           </button>
-          {day?.status === "cross" && !stretchLabel && (
+          {day?.status === "cross" && stretchDayList.length === 0 && (
             <p className="tiny muted" style={{ margin: "8px 2px 0" }}>
-              Tip: add a <b>“{STRETCH_DAY}”</b> day in the Routine tab to check off your stretches on sport days.
+              Tip: in the Routine tab, open a workout day's <b>⋯</b> menu and <b>Mark as stretch day</b> to check off your stretches on sport days.
             </p>
           )}
         </>

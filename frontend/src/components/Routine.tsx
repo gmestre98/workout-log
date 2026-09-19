@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import type { Exercise, TravelVariant, Unit } from "../types";
 import { MUSCLE_GROUPS, EQUIPMENT_OPTIONS, UNITS } from "../types";
-import { dayOf, orderedParts, orderedWorkoutDays, slotColor } from "../format";
+import { dayOf, orderedParts, orderedWorkoutDays, slotColor, stretchDayLabels } from "../format";
 import { toast } from "../toast";
 import { useOnline } from "../useOnline";
 import { ConfirmDialog, Modal } from "./Modal";
@@ -43,10 +43,10 @@ const distinctFrom = (exercises: Exercise[], pick: (e: Exercise) => string): str
 // A blank exercise. workoutDay and timeSlot carry no baked-in default — the day
 // is chosen (or created) in the form, and an empty timeSlot means the day has no
 // time-of-day parts (a single flat workout).
-const blank = (sortOrder: number, workoutDay = "", timeSlot = ""): Draft => ({
+const blank = (sortOrder: number, workoutDay = "", timeSlot = "", stretchDay = false): Draft => ({
   workoutDay, timeSlot, name: "", plannedSets: 3, plannedAmount: 10,
   unit: "reps", note: "", restSeconds: 30, muscleGroup: "", equipment: "",
-  sortOrder, active: true, perSide: false,
+  sortOrder, active: true, perSide: false, stretchDay,
 });
 
 // A drag grip (six dots). Spread the reorder handle props onto it.
@@ -97,6 +97,10 @@ export function Routine() {
   };
 
   const days = useMemo(() => orderedWorkoutDays(exercises), [exercises]);
+  const stretchLabels = useMemo(() => stretchDayLabels(exercises), [exercises]);
+  // The rotation cycle — the workout days you rotate through, excluding stretch
+  // days (which are done on sport days, off-rotation).
+  const rotationDayList = useMemo(() => days.filter((d) => !stretchLabels.has(d)), [days, stretchLabels]);
   const exsOfDay = (d: string) => exercises.filter((e) => dayOf(e) === d);
 
   // Persist a fully re-flattened order: renumber sortOrder to array position and
@@ -133,6 +137,23 @@ export function Routine() {
       await Promise.all(exsOfDay(from).map((e) => api.updateExercise({ ...e, workoutDay: to })));
       setRenameDay(null);
       toast("Workout day renamed");
+      load();
+    } catch (e: any) { setError(String(e.message ?? e)); }
+    finally { setBusy(false); }
+  };
+
+  // Toggle whether a whole workout day is a "stretch day" — set the flag on every
+  // exercise in it (a day counts as a stretch day if any of its exercises carry
+  // it, but keeping them consistent is tidier). Stretch days drop out of the
+  // rotation and are what a sport day switches to on the Today screen.
+  const doToggleStretchDay = async (day: string) => {
+    if (offline) return;
+    const on = !stretchLabels.has(day);
+    setBusy(true);
+    try {
+      await Promise.all(exsOfDay(day).map((e) => api.updateExercise({ ...e, stretchDay: on })));
+      setMenuForDay(null);
+      toast(on ? "Marked as stretch day" : "No longer a stretch day");
       load();
     } catch (e: any) { setError(String(e.message ?? e)); }
     finally { setBusy(false); }
@@ -200,13 +221,13 @@ export function Routine() {
             <div className="fig"><span className="n num">{days.length}</span><span className="l">Workout {days.length === 1 ? "day" : "days"}</span></div>
             <div className="fig"><span className="n num">{activeCount}</span><span className="l">Exercises</span></div>
           </div>
-          {days.length > 1 && (
+          {rotationDayList.length > 1 && (
             <div className="rotation">
               <span className="rlabel">Rotation</span>
-              {days.map((d, i) => (
+              {rotationDayList.map((d, i) => (
                 <span key={d} className="rot-item">
                   <span className="rchip">{d.split(" — ")[0]}</span>
-                  {i < days.length - 1 && <span className="rarrow">→</span>}
+                  {i < rotationDayList.length - 1 && <span className="rarrow">→</span>}
                 </span>
               ))}
               <span className="rloop" aria-hidden>↻</span>
@@ -224,12 +245,14 @@ export function Routine() {
         renderItem={(day, { handleProps }) => {
           const dayExs = exsOfDay(day);
           const color = slotColor(day, days);
+          const isStretch = stretchLabels.has(day);
           return (
             <div className="card day-card">
               <div className="day-head">
                 {days.length > 1 && <Grip {...handleProps} />}
                 <span className="day-dot" style={{ color: `var(--${color})` }} />
                 <span className="day-name">{day}</span>
+                {isStretch && <span className="pillbadge" title="Stretch day — outside the rotation, used on sport days">🧘 stretch</span>}
                 <span className="day-spacer" />
                 <span className="day-count num">{dayExs.length}</span>
                 <button className="day-menu" onClick={() => setMenuForDay(day)} aria-label={`Manage ${day}`} disabled={offline}>⋯</button>
@@ -239,8 +262,8 @@ export function Routine() {
                 disabled={offline}
                 onReorder={(next) => reorderDayExercises(day, next)}
                 onEdit={(ex) => setDraft({ ...ex })}
-                onAddExercise={(part) => setDraft(blank(exercises.length, day, part))}
-                onAddPart={() => setDraft(blank(exercises.length, day, ""))}
+                onAddExercise={(part) => setDraft(blank(exercises.length, day, part, isStretch))}
+                onAddPart={() => setDraft(blank(exercises.length, day, "", isStretch))}
               />
             </div>
           );
@@ -260,6 +283,12 @@ export function Routine() {
           <p className="modal-msg">Manage this workout day.</p>
           <div className="form" style={{ gap: 10 }}>
             <button className="btn block" onClick={() => { setRenameDay(menuForDay); setMenuForDay(null); }}>Rename workout day</button>
+            <button className="btn block" onClick={() => doToggleStretchDay(menuForDay)} disabled={busy}>
+              {stretchLabels.has(menuForDay) ? "🧘 Unmark as stretch day" : "🧘 Mark as stretch day"}
+            </button>
+            <p className="tiny muted" style={{ margin: "-2px 2px 2px" }}>
+              A stretch day sits outside your rotation. On a day you play another sport, it's the routine you check off instead.
+            </p>
             <button className="btn danger block" onClick={() => { setDeleteDay(menuForDay); setMenuForDay(null); }}>Delete workout day</button>
           </div>
           <div className="modal-btns">

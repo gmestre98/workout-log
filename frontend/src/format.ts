@@ -1,5 +1,5 @@
 import type { DayLog, Exercise, ExerciseLog, SetEntry, Unit } from "./types";
-import { DEFAULT_WORKOUT_DAY, STRETCH_DAY } from "./types";
+import { DEFAULT_WORKOUT_DAY } from "./types";
 
 // dayOf returns the workout day an exercise belongs to, normalising an empty
 // workoutDay (legacy data) to the single default day so ungrouped exercises
@@ -185,10 +185,14 @@ export function dayMoved(d: DayLog): boolean {
   return d.status === "cross" || dayHasActivity(d);
 }
 
-// isStretchDay reports whether a workout-day label is the reserved Stretch day
-// (case-insensitive), which sits outside the rotation cycle. See STRETCH_DAY.
-export function isStretchDay(workoutDay: string | undefined | null): boolean {
-  return !!workoutDay && workoutDay.toLowerCase() === STRETCH_DAY.toLowerCase();
+// stretchDayLabels returns the set of workout-day labels marked as stretch days
+// — a day counts if ANY of its exercises has the stretchDay flag. Stretch days
+// sit outside the rotation cycle and are what a sport day switches to. Pass the
+// routine's exercises (the whole routine, not one day's).
+export function stretchDayLabels(exercises: { workoutDay?: string; stretchDay?: boolean }[]): Set<string> {
+  const s = new Set<string>();
+  for (const e of exercises) if (e.stretchDay) s.add(dayOf(e));
+  return s;
 }
 
 // computeStreak counts consecutive active days ending today (or yesterday, as a

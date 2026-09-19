@@ -30,7 +30,7 @@ import {
   applyTravel,
   dayHasActivity,
   dayMoved,
-  isStretchDay,
+  stretchDayLabels,
 } from "./format";
 import type { DayLog, Exercise } from "./types";
 
@@ -60,23 +60,26 @@ describe("dayHasActivity / dayMoved", () => {
     expect(dayMoved(empty())).toBe(false);
   });
 
-  it("isStretchDay matches the reserved label case-insensitively", () => {
-    expect(isStretchDay("Stretch")).toBe(true);
-    expect(isStretchDay("stretch")).toBe(true);
-    expect(isStretchDay("Day 1")).toBe(false);
-    expect(isStretchDay("")).toBe(false);
-    expect(isStretchDay(undefined)).toBe(false);
+  it("stretchDayLabels collects days that have any flagged exercise", () => {
+    const exs = [
+      ex("a", { workoutDay: "Day 1", stretchDay: false }),
+      ex("b", { workoutDay: "Mobility", stretchDay: true }),
+      ex("c", { workoutDay: "Lower stretch", stretchDay: true }),
+    ];
+    const labels = stretchDayLabels(exs);
+    expect([...labels].sort()).toEqual(["Lower stretch", "Mobility"]);
+    expect(labels.has("Day 1")).toBe(false);
   });
 });
 
-describe("nextWorkoutDay excludes the Stretch day from rotation", () => {
+describe("nextWorkoutDay excludes stretch days from rotation", () => {
   it("advances only through the rotation days it is given", () => {
-    // The caller passes rotationDays (Stretch filtered out), so a sport day
-    // logged as "Stretch" is ignored and the rotation resumes where it left off.
+    // The caller passes rotationDays (stretch days filtered out), so a sport day
+    // logged as a stretch day is ignored and the rotation resumes where it left off.
     const rotation = ["Day 1", "Day 2", "Day 3"];
     const history = new Map<string, string | undefined>([
       ["2026-07-18", "Day 1"],
-      ["2026-07-19", "Stretch"], // a sport day — not in rotation, so ignored
+      ["2026-07-19", "Mobility"], // a sport day's stretch — not in rotation, ignored
     ]);
     expect(nextWorkoutDay(history, rotation, "2026-07-20")).toBe("Day 2");
   });

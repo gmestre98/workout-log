@@ -22,6 +22,12 @@ export interface Exercise {
   // When true the exercise is tracked once per side (left/right), so a day log
   // holds 2*plannedSets entries ordered left, right, left, right…
   perSide: boolean;
+  // Marks this exercise's workout day as a "stretch day" (see STRETCH_DAY note
+  // removed): a day used for stretches on days you played another sport. Such
+  // days are kept out of the rotation cycle and are what a sport day switches
+  // to. A day is a stretch day if any of its exercises has this set; the routine
+  // editor toggles it for the whole day at once. Absent/false on normal days.
+  stretchDay?: boolean;
   // Optional stand-in performed instead of this exercise while travelling. Absent
   // when there is no travel replacement. When travel mode is on, an exercise that
   // has one is shown, logged and scored as its travel variant — under the same
@@ -134,13 +140,6 @@ export const UNITS: Unit[] = ["reps", "seconds", "minutes"];
 // data). Grouping and scoring normalise empty to this, so an old single routine
 // reads as one day rather than losing its structure.
 export const DEFAULT_WORKOUT_DAY = "Day 1";
-
-// The reserved workout-day label for stretches done on a day you played another
-// sport. It is a normal workout day in the routine (configure its stretches in
-// the Routine tab), but it is kept OUT of the rotation cycle — the 3-day
-// rotation never auto-advances into it — and picking a sport auto-selects it so
-// the stretches show. Matched case-insensitively so "stretch"/"Stretch" both work.
-export const STRETCH_DAY = "Stretch";
 
 // Trained parts offered as chips when editing an exercise. The stored
 // muscleGroup is a comma-joined subset of these (plus any custom entries the

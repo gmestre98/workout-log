@@ -49,6 +49,12 @@ type Exercise struct {
 	Equipment     string `json:"equipment" firestore:"equipment"`
 	SortOrder     int    `json:"sortOrder" firestore:"sortOrder"`
 	Active        bool   `json:"active" firestore:"active"`
+	// StretchDay marks this exercise's workout day as a "stretch day": a day used
+	// for the stretch routine on days you played another sport. Stretch days are
+	// kept out of the rotation cycle and are what a sport (cross) day switches to.
+	// The flag lives on each exercise — a day is a stretch day if any of its
+	// exercises carries it — and is toggled for the whole day from the editor.
+	StretchDay bool `json:"stretchDay" firestore:"stretchDay"`
 	// PerSide marks an exercise done on both sides (e.g. side plank, split
 	// squats). When true each planned set is tracked once per side, so a day log
 	// holds 2*PlannedSets entries ordered left, right, left, right…
