@@ -1,5 +1,5 @@
 import type { DayLog, Exercise, ExerciseLog, SetEntry, Unit } from "./types";
-import { DEFAULT_WORKOUT_DAY } from "./types";
+import { DEFAULT_WORKOUT_DAY, STRETCH_DAY } from "./types";
 
 // dayOf returns the workout day an exercise belongs to, normalising an empty
 // workoutDay (legacy data) to the single default day so ungrouped exercises
@@ -177,11 +177,18 @@ export function dayHasActivity(d: DayLog): boolean {
   return Object.values(d.exercises).some((l) => l.sets.some((s) => s.completed));
 }
 
-// dayMoved reports whether the day counts as physical activity for the "moved"
-// streak: either the routine had logged work, or it was a cross-training day
-// (trained a different sport). A skipped day counts as neither.
+// dayMoved reports whether the day counts as a workout for the streak: either
+// the routine had logged work, or it was a sport day (status "cross" — you
+// trained a different sport and stretched instead). A skipped or empty day does
+// not count, so it breaks the streak. This is the single "did I work out" test.
 export function dayMoved(d: DayLog): boolean {
   return d.status === "cross" || dayHasActivity(d);
+}
+
+// isStretchDay reports whether a workout-day label is the reserved Stretch day
+// (case-insensitive), which sits outside the rotation cycle. See STRETCH_DAY.
+export function isStretchDay(workoutDay: string | undefined | null): boolean {
+  return !!workoutDay && workoutDay.toLowerCase() === STRETCH_DAY.toLowerCase();
 }
 
 // computeStreak counts consecutive active days ending today (or yesterday, as a

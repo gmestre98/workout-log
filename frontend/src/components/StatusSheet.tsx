@@ -15,6 +15,7 @@ import { ChipSelect } from "./Combo";
 export function StatusSheet({
   date,
   current,
+  initialStatus,
   knownCross,
   knownSkip,
   onSave,
@@ -23,13 +24,16 @@ export function StatusSheet({
 }: {
   date: string;
   current: { status?: DayStatus; statusTags?: string[]; statusNote?: string };
+  // Which tab to open on when there is no existing status (the sport-first
+  // action opens "cross", the tucked-away link opens "skipped").
+  initialStatus?: DayStatus;
   knownCross: string[];
   knownSkip: string[];
   onSave: (status: DayStatus, tags: string[], note: string) => void;
   onClear: () => void;
   onClose: () => void;
 }) {
-  const [status, setStatus] = useState<DayStatus>(current.status ?? "cross");
+  const [status, setStatus] = useState<DayStatus>(current.status ?? initialStatus ?? "cross");
   const [crossTags, setCrossTags] = useState<string[]>(
     current.status === "cross" ? current.statusTags ?? [] : []
   );
@@ -62,17 +66,17 @@ export function StatusSheet({
 
         <div className="ls-seg" role="group" aria-label="Day type" style={{ display: "flex", width: "100%" }}>
           <button type="button" className={status === "cross" ? "active" : ""} style={{ flex: 1 }} onClick={() => setStatus("cross")}>
-            🏃 Trained else
+            🏃 Sport + stretch
           </button>
           <button type="button" className={status === "skipped" ? "active" : ""} style={{ flex: 1 }} onClick={() => setStatus("skipped")}>
-            ⏸ Skipped
+            ⏸ Couldn't train
           </button>
         </div>
 
         <div style={{ marginTop: 16 }}>
           <div className="tiny muted" style={{ marginBottom: 8, fontWeight: 650 }}>
             {status === "cross"
-              ? "What sport did you do? (tap or add your own)"
+              ? "Which sport? (tap or add your own — then check off your stretches)"
               : "Why did you miss it? (tap or add your own)"}
           </div>
           <ChipSelect

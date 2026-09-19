@@ -135,6 +135,13 @@ export const UNITS: Unit[] = ["reps", "seconds", "minutes"];
 // reads as one day rather than losing its structure.
 export const DEFAULT_WORKOUT_DAY = "Day 1";
 
+// The reserved workout-day label for stretches done on a day you played another
+// sport. It is a normal workout day in the routine (configure its stretches in
+// the Routine tab), but it is kept OUT of the rotation cycle — the 3-day
+// rotation never auto-advances into it — and picking a sport auto-selects it so
+// the stretches show. Matched case-insensitively so "stretch"/"Stretch" both work.
+export const STRETCH_DAY = "Stretch";
+
 // Trained parts offered as chips when editing an exercise. The stored
 // muscleGroup is a comma-joined subset of these (plus any custom entries the
 // user types), so an exercise can train several parts.

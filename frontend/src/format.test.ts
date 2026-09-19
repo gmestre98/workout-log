@@ -30,6 +30,7 @@ import {
   applyTravel,
   dayHasActivity,
   dayMoved,
+  isStretchDay,
 } from "./format";
 import type { DayLog, Exercise } from "./types";
 
@@ -57,6 +58,27 @@ describe("dayHasActivity / dayMoved", () => {
     expect(dayMoved(empty({ status: "cross", statusTags: ["Running"] }))).toBe(true);
     expect(dayMoved(empty({ status: "skipped", statusTags: ["Tired"] }))).toBe(false);
     expect(dayMoved(empty())).toBe(false);
+  });
+
+  it("isStretchDay matches the reserved label case-insensitively", () => {
+    expect(isStretchDay("Stretch")).toBe(true);
+    expect(isStretchDay("stretch")).toBe(true);
+    expect(isStretchDay("Day 1")).toBe(false);
+    expect(isStretchDay("")).toBe(false);
+    expect(isStretchDay(undefined)).toBe(false);
+  });
+});
+
+describe("nextWorkoutDay excludes the Stretch day from rotation", () => {
+  it("advances only through the rotation days it is given", () => {
+    // The caller passes rotationDays (Stretch filtered out), so a sport day
+    // logged as "Stretch" is ignored and the rotation resumes where it left off.
+    const rotation = ["Day 1", "Day 2", "Day 3"];
+    const history = new Map<string, string | undefined>([
+      ["2026-07-18", "Day 1"],
+      ["2026-07-19", "Stretch"], // a sport day — not in rotation, so ignored
+    ]);
+    expect(nextWorkoutDay(history, rotation, "2026-07-20")).toBe("Day 2");
   });
 });
 

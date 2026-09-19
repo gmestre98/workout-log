@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { getDay, saveDay, subscribeSync, getSyncState, type SyncState } from "../dayStore";
 import type { DayLog, DayStatus, Exercise, ExerciseLog, RoutineVersion, VersionAssignment } from "../types";
+import { STRETCH_DAY } from "../types";
 import {
   addDaysISO, applyTravel, computeStreak, dayCompletion, dayHasActivity, dayHeader, dayMoved, dayOf,
-  effectiveVersionId, exerciseCompletion, formatPercent, newLog, nextWorkoutDay, orderedWorkoutDays,
-  routineForDate, setMeta, slotColor, todayISO,
+  effectiveVersionId, exerciseCompletion, formatPercent, isStretchDay, newLog, nextWorkoutDay,
+  orderedWorkoutDays, routineForDate, setMeta, slotColor, todayISO,
 } from "../format";
 import { getTravelMode, setTravelMode, getTravelOff, setTravelOff } from "../travel";
 import { clockTotals, workoutClock } from "../timer";
@@ -21,7 +22,7 @@ const today = todayISO();
 
 // Label + icon for a non-routine day's status card.
 const STATUS_META: Record<DayStatus, { icon: string; verb: string }> = {
-  cross: { icon: "🏃", verb: "Trained something else" },
+  cross: { icon: "🏃", verb: "Sport + stretch" },
   skipped: { icon: "⏸", verb: "Skipped the routine" },
 };
 
@@ -39,15 +40,18 @@ export function Today({ email }: { email: string }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [liveExercises, setLiveExercises] = useState<Exercise[]>([]);
   const [day, setDay] = useState<DayLog | null>(null);
-  const [activeDates, setActiveDates] = useState<Set<string>>(new Set());
-  // Dates that count toward the "moved" streak: routine activity OR a cross day.
-  const [movedDates, setMovedDates] = useState<Set<string>>(new Set());
+  // Dates that count as a workout for the single streak: routine activity OR a
+  // sport (cross) day. A skip or empty day breaks it. See dayMoved.
+  const [workoutDates, setWorkoutDates] = useState<Set<string>>(new Set());
   // Status types used on recent days, so the sheet resurfaces the user's own
   // vocabulary (sports for cross days, reasons for skipped ones) alongside the
   // seeded suggestions — same idea as equipment resurfacing in the routine form.
   const [knownCross, setKnownCross] = useState<string[]>([]);
   const [knownSkip, setKnownSkip] = useState<string[]>([]);
   const [statusOpen, setStatusOpen] = useState(false);
+  // Which status the log sheet opens on (sport vs skip), so the primary "sport"
+  // action and the tucked-away "couldn't train" link each open the right tab.
+  const [sheetStatus, setSheetStatus] = useState<DayStatus>("cross");
   // Which workout day was performed on each recent date, for the rotation
   // default. Built from the same recent-days fetch that feeds the streak.
   const [workoutDayByDate, setWorkoutDayByDate] = useState<Map<string, string | undefined>>(new Map());
@@ -84,19 +88,16 @@ export function Today({ email }: { email: string }) {
   useEffect(() => {
     api.listDays(addDaysISO(today, -90), today)
       .then((days) => {
-        const set = new Set<string>();
-        const moved = new Set<string>();
+        const worked = new Set<string>();
         const wd = new Map<string, string | undefined>();
         const cross = new Set<string>();
         const skip = new Set<string>();
         for (const d of days) {
-          if (dayHasActivity(d)) set.add(d.date);
-          if (dayMoved(d)) moved.add(d.date);
+          if (dayMoved(d)) worked.add(d.date);
           wd.set(d.date, d.workoutDay);
           for (const t of d.statusTags ?? []) (d.status === "cross" ? cross : skip).add(t);
         }
-        setActiveDates(set);
-        setMovedDates(moved);
+        setWorkoutDates(worked);
         setWorkoutDayByDate(wd);
         setKnownCross([...cross]);
         setKnownSkip([...skip]);
@@ -157,6 +158,12 @@ export function Today({ email }: { email: string }) {
     [date, schedule, versions, liveExercises]
   );
   const orderedDays = useMemo(() => orderedWorkoutDays(routineExercises), [routineExercises]);
+  // The rotation cycle excludes the Stretch day, so auto-advance goes Day 1 → 2
+  // → 3 → 1 and never lands on Stretch; a sport day doesn't consume the rotation.
+  const rotationDays = useMemo(() => orderedDays.filter((d) => !isStretchDay(d)), [orderedDays]);
+  // The actual Stretch-day label in this routine (if the user has set one up), so
+  // a sport day can switch to it. Undefined when no Stretch day exists yet.
+  const stretchLabel = useMemo(() => orderedDays.find((d) => isStretchDay(d)), [orderedDays]);
 
   // A legacy day (logged before rotation existed: has activity, no workoutDay)
   // keeps showing the whole routine as before. Every other date is a single
@@ -167,8 +174,8 @@ export function Today({ email }: { email: string }) {
   // else the one already stored on the day, else the rotation default — the day
   // after the most recently performed session.
   const rotationDefault = useMemo(
-    () => nextWorkoutDay(workoutDayByDate, orderedDays, date),
-    [workoutDayByDate, orderedDays, date]
+    () => nextWorkoutDay(workoutDayByDate, rotationDays, date),
+    [workoutDayByDate, rotationDays, date]
   );
   // The chosen day must be one that still exists in the routine. A stored or
   // stamped workoutDay that no longer matches any day (e.g. logged under an
@@ -251,12 +258,7 @@ export function Today({ email }: { email: string }) {
       // Keep the rotation map current so the next session advances correctly.
       setWorkoutDayByDate((prev) => new Map(prev).set(next.date, next.workoutDay));
       if (next.date === today) {
-        setActiveDates((prev) => {
-          const s = new Set(prev);
-          if (dayHasActivity(next)) s.add(today); else s.delete(today);
-          return s;
-        });
-        setMovedDates((prev) => {
+        setWorkoutDates((prev) => {
           const s = new Set(prev);
           if (dayMoved(next)) s.add(today); else s.delete(today);
           return s;
@@ -378,6 +380,15 @@ export function Today({ email }: { email: string }) {
   // streak dots. Passing null clears the status (keeping any routine work).
   const setStatus = useCallback(
     (status: DayStatus | null, tags: string[], note: string) => {
+      // A sport day does the Stretch routine instead of the rotation, so switch
+      // the selected day to Stretch (if one is set up). Clearing a sport day
+      // returns to the rotation default. The override mirrors day.workoutDay so
+      // the switcher and the rendered exercises stay in sync.
+      setOverride((ov) => {
+        if (status === "cross" && stretchLabel) return stretchLabel;
+        if (!status && isStretchDay(ov)) return rotationDefault ?? null;
+        return ov;
+      });
       setDay((prev) => {
         const base = prev ?? { date, exercises: {} };
         const next: DayLog = { ...base, date };
@@ -385,10 +396,12 @@ export function Today({ email }: { email: string }) {
           next.status = status;
           next.statusTags = tags;
           next.statusNote = note || undefined;
+          if (status === "cross" && stretchLabel) next.workoutDay = stretchLabel;
         } else {
           delete next.status;
           delete next.statusTags;
           delete next.statusNote;
+          if (isStretchDay(base.workoutDay)) next.workoutDay = rotationDefault;
         }
         scheduleSave(next);
         return next;
@@ -398,7 +411,7 @@ export function Today({ email }: { email: string }) {
       if (status === "cross" && tags.length) setKnownCross((k) => [...new Set([...k, ...tags])]);
       if (status === "skipped" && tags.length) setKnownSkip((k) => [...new Set([...k, ...tags])]);
     },
-    [date, scheduleSave]
+    [date, scheduleSave, stretchLabel, rotationDefault]
   );
 
   // logSet marks the next incomplete set of ex as done with the given amount
@@ -422,8 +435,7 @@ export function Today({ email }: { email: string }) {
   }, [exercises]);
 
   const dayAvg = useMemo(() => dayCompletion(exercises, day ?? undefined), [exercises, day]);
-  const streak = computeStreak(activeDates, today);
-  const moveStreak = computeStreak(movedDates, today);
+  const streak = computeStreak(workoutDates, today);
   const statusMeta = day?.status ? STATUS_META[day.status] : null;
   const activeId = useMemo(
     () => exercises.find((e) => exerciseCompletion(logFor(e)) < 1)?.id,
@@ -533,18 +545,9 @@ export function Today({ email }: { email: string }) {
         <div className="ring-wrap">
           <Ring value={dayAvg} label={date === today ? "Today" : "Day"} />
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 13 }}>
-            {(streak > 0 || moveStreak > 0) && (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {streak > 0 && (
-                  <div className="streakpill" title="Consecutive days you trained the routine">
-                    <span>🔥</span><span className="num">{streak}</span> routine
-                  </div>
-                )}
-                {moveStreak > 0 && (
-                  <div className="streakpill move" title="Consecutive days you moved — routine or another sport">
-                    <span>⚡</span><span className="num">{moveStreak}</span> moving
-                  </div>
-                )}
+            {streak > 0 && (
+              <div className="streakpill" title="Consecutive days you worked out — routine or a sport + stretch">
+                <span>🔥</span><span className="num">{streak}</span>-day streak
               </div>
             )}
             <div style={{ display: "flex", gap: 18 }}>
@@ -556,21 +559,33 @@ export function Today({ email }: { email: string }) {
       </div>
 
       {statusMeta ? (
-        <button className="status-card" onClick={() => setStatusOpen(true)} aria-label="Edit what happened">
-          <span className="status-ic" aria-hidden>{statusMeta.icon}</span>
-          <span className="status-txt">
-            <span className="status-verb">{statusMeta.verb}</span>
-            <span className="ex-meta">
-              {(day?.statusTags ?? []).join(" · ") || "No type set"}
-              {day?.statusNote ? ` — ${day.statusNote}` : ""}
+        <>
+          <button className="status-card" onClick={() => { if (day?.status) setSheetStatus(day.status); setStatusOpen(true); }} aria-label="Edit what happened">
+            <span className="status-ic" aria-hidden>{statusMeta.icon}</span>
+            <span className="status-txt">
+              <span className="status-verb">{statusMeta.verb}</span>
+              <span className="ex-meta">
+                {(day?.statusTags ?? []).join(" · ") || "No type set"}
+                {day?.statusNote ? ` — ${day.statusNote}` : ""}
+              </span>
             </span>
-          </span>
-          <span className="link" style={{ flex: "none" }}>Edit</span>
-        </button>
+            <span className="link" style={{ flex: "none" }}>Edit</span>
+          </button>
+          {day?.status === "cross" && !stretchLabel && (
+            <p className="tiny muted" style={{ margin: "8px 2px 0" }}>
+              Tip: add a <b>“{STRETCH_DAY}”</b> day in the Routine tab to check off your stretches on sport days.
+            </p>
+          )}
+        </>
       ) : !dayLogged ? (
-        <button className="status-prompt" onClick={() => setStatusOpen(true)}>
-          Didn't do the routine? <b>Log what happened</b>
-        </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button className="status-prompt" onClick={() => { setSheetStatus("cross"); setStatusOpen(true); }}>
+            🏃 <b>Different sport today?</b> Log it &amp; stretch
+          </button>
+          <button className="link" style={{ alignSelf: "center", color: "var(--ink-2)", fontSize: 12.5 }} onClick={() => { setSheetStatus("skipped"); setStatusOpen(true); }}>
+            Couldn't train today?
+          </button>
+        </div>
       ) : null}
 
       {date === today && exercises.length > 0 && (
@@ -629,6 +644,7 @@ export function Today({ email }: { email: string }) {
       {statusOpen && (
         <StatusSheet
           date={date}
+          initialStatus={sheetStatus}
           current={{ status: day?.status, statusTags: day?.statusTags, statusNote: day?.statusNote }}
           knownCross={knownCross}
           knownSkip={knownSkip}

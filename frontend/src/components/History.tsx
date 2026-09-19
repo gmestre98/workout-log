@@ -43,15 +43,19 @@ export function History() {
     for (let i = 0; i < leadBlanks; i++) out.push({ level: -1 });
     for (let d = 1; d <= lastDay; d++) {
       const date = `${month}-${String(d).padStart(2, "0")}`;
-      const comp = dayCompletion(routineFor(date), byDate.get(date));
-      out.push({ date, level: heatLevel(comp), today: date === todayISO() });
+      const dl = byDate.get(date);
+      const comp = dayCompletion(routineFor(date), dl);
+      // A sport day counts as a workout, so it always reads as at least a
+      // mid-level cell even if its stretches weren't checked off.
+      const level = dl?.status === "cross" ? Math.max(heatLevel(comp), 2) : heatLevel(comp);
+      out.push({ date, level, today: date === todayISO() });
     }
     return out;
   }, [leadBlanks, lastDay, month, routineFor, byDate]);
 
-  const activeDays = (days ?? []).filter((d) => dayCompletion(routineFor(d.date), d) > 0).length;
-  // Days the user moved at all — routine work or a logged cross-training day.
-  const movedDays = (days ?? []).filter((d) => dayMoved(d)).length;
+  // Days the user worked out — routine work or a sport day. This is the single
+  // "did I train" count, matching the streak.
+  const activeDays = (days ?? []).filter((d) => dayMoved(d)).length;
   const recent = useMemo(
     () => [...(days ?? [])].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8),
     [days]
@@ -86,10 +90,7 @@ export function History() {
             </div>
             <div className="legend-row">
               <span className="sc">Less <i style={{ background: "var(--surface-2)" }} /><i style={{ background: "color-mix(in srgb,var(--ember) 45%,transparent)" }} /><i style={{ background: "var(--ember)" }} /> More</span>
-              <span style={{ fontWeight: 700, color: "var(--ink)" }}>
-                <span className="num">{activeDays}</span> active
-                {movedDays > activeDays && <> · <span className="num">{movedDays}</span> moved</>} days
-              </span>
+              <span style={{ fontWeight: 700, color: "var(--ink)" }}><span className="num">{activeDays}</span> active days</span>
             </div>
           </div>
 
@@ -111,7 +112,7 @@ export function History() {
                     : comp >= 1 ? "Full day" : comp > 0 ? "Partial day" : "Rest day";
                 const right = comp > 0
                   ? formatPercent(comp)
-                  : d.status === "cross" ? "moved" : d.status === "skipped" ? "skipped" : "—";
+                  : d.status === "cross" ? "done" : d.status === "skipped" ? "skipped" : "—";
                 const rightCls = comp >= 1 ? "g" : comp > 0 ? "a" : d.status === "cross" ? "g" : "z";
                 const barCls = comp >= 1 ? "bar g" : comp > 0 ? "bar" : d.status === "cross" ? "bar g" : "bar zero";
                 const barW = comp > 0 ? Math.max(comp * 100, 6) : d.status === "cross" ? 100 : 3;
